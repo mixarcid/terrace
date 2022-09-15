@@ -1,25 +1,53 @@
 import torch
 from torch import nn
 
+from type_data import TypeData, TensorTD
+
 class Module(nn.Module):
     
-    def __init__(self, prev_modules, out_shapes, inner_mod = None):
+    def __init__(self, prev_modules, out_types, inner_mod = None):
         super().__init__()
         self.prev_modules = prev_modules
         for module in prev_modules:
-            assert len(module.out_shapes) == 1
-        self.in_shapes = [ module.out_shape for module in prev_modules ]
-        self.out_shapes = out_shapes
+            assert len(module.out_types) == 1
+        self.in_types = [ module.out_type for module in prev_modules ]
+        self.out_types = out_types
         self.inner_mod = inner_mod
         
     @property
+    def out_type(self):
+        assert len(self.out_types) == 1
+        return self.out_types[0]
+    
+    @property
+    def in_type(self):
+        assert len(self.in_types) == 1
+        return self.in_types[0]
+
+    @property
+    def out_shapes(self):
+        ret = []
+        for td in self.out_types:
+            assert isinstance(td, TensorTD)
+            ret.append(td.shape)
+        return ret
+    
+    @property
+    def in_shapes(self):
+        ret = []
+        for td in self.in_types:
+            assert isinstance(td, TensorTD)
+            ret.append(td.shape)
+        return ret
+
+    @property
     def out_shape(self):
-        assert len(self.out_shapes) == 1
+        assert len(self.out_types) == 1
         return self.out_shapes[0]
     
     @property
     def in_shape(self):
-        assert len(self.in_shapes) == 1
+        assert len(self.in_types) == 1
         return self.in_shapes[0]
     
     def __call__(self, *args, **kwargs):
@@ -38,7 +66,7 @@ class Module(nn.Module):
 class Input(Module):
     
     def __init__(self, shape):
-        super().__init__([], [shape], lambda x: x)
+        super().__init__([], [TensorTD(shape)], lambda x: x)
         
     def call_with_inputs(self, input_mods, inputs):
         for mod, imp in zip(input_mods, inputs):
@@ -58,7 +86,7 @@ class Cat(Module):
             else:
                 assert len(out_shape) == len(in_shape)
                 out_shape[axis] += in_shape[axis]
-        super().__init__(prev_modules, [tuple(out_shape)], lambda *args: torch.cat(args, axis))
+        super().__init__(prev_modules, [TensorTD(tuple(out_shape))], lambda *args: torch.cat(args, axis))
     
 class Linear(Module):
     
@@ -66,13 +94,13 @@ class Linear(Module):
         assert len(prev_module.out_shape) == 2
         batch, in_feats = prev_module.out_shape
         out_shape = (batch, feats)
-        super().__init__([prev_module], [out_shape], nn.Linear(in_feats, feats, *args, **kwargs))
+        super().__init__([prev_module], [TensorTD(out_shape)], nn.Linear(in_feats, feats, *args, **kwargs))
         
 class Model(Module):
     
     def __init__(self, in_mods, out_mods):
-        out_shapes = [ out.out_shape for out in out_mods ]
-        super().__init__(in_mods, out_shapes)
+        out_types = [ TensorTD(out.out_shape) for out in out_mods ]
+        super().__init__(in_mods, out_types)
 
         # we need to add all the modules in the graph to a modulelist
         # so torch knows to optimize their params
