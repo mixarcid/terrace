@@ -3,7 +3,7 @@ from torch import nn
 
 class Module(nn.Module):
     
-    def __init__(self, prev_modules, out_shapes, inner_mod):
+    def __init__(self, prev_modules, out_shapes, inner_mod = None):
         super().__init__()
         self.prev_modules = prev_modules
         for module in prev_modules:
@@ -23,10 +23,13 @@ class Module(nn.Module):
         return self.in_shapes[0]
     
     def __call__(self, *args, **kwargs):
-        assert self.inner_mod is not None
+        if self.inner_mod is None:
+            raise NotImplementedError
         return self.inner_mod(*args, **kwargs)
     
     def call_with_inputs(self, input_mods, inputs):
+        """ Used by Model's __call__ method (below). Input overrides this
+        recursive call for the base case """
         args = []
         for prev in self.prev_modules:
             args.append(prev.call_with_inputs(input_mods, inputs))
@@ -69,7 +72,17 @@ class Model(Module):
     
     def __init__(self, in_mods, out_mods):
         out_shapes = [ out.out_shape for out in out_mods ]
-        super().__init__(in_mods, out_shapes, None)
+        super().__init__(in_mods, out_shapes)
+
+        # we need to add all the modules in the graph to a modulelist
+        # so torch knows to optimize their params
+        to_explore = set(out_mods)
+        my_mods = set()
+        while len(to_explore) > 0:
+            mod = to_explore.pop()
+            my_mods.add(mod)
+            to_explore = to_explore.union(set(mod.prev_modules))
+        self.submodules = nn.ModuleList(my_mods)
         self.out_mods = out_mods
         
     def __call__(self, inputs):
