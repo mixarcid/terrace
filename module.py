@@ -102,14 +102,18 @@ class OpModule(Module):
 class Input(Module):
     many_inputs = True
     
-    def __init__(self, shape):
-        super().__init__([], shape)
+    def __init__(self, shape, dtype = torch.float32):
+        super().__init__([], shape, dtype)
 
     def forward(self, x):
         return x
 
-    def get_out_shape(self, shape):
-        return shape
+    def get_out_types(self, shape, dtype):
+        if isinstance(shape, tuple):
+            return [ TensorTD(shape, dtype) ]
+        else:
+            # It's a typedata
+            return [ shape ]
         
     def call_with_inputs(self, input_mods, inputs):
         for mod, imp in zip(input_mods, inputs):

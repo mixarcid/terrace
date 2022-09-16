@@ -1,12 +1,9 @@
 import torch
-from typing import Type, List, Tuple, Union
+from typing import Type, List, Tuple, Union, Dict, Type
 from collections import defaultdict
-from dataclasses import dataclass
 from sympy import Symbol, Expr, Integer, symbols
 
-def default_init(cls):
-    """ makes a default init function for a class """
-    return dataclass(eq=False,repr=False)(cls)
+from meta_utils import default_init, get_type_name
 
 def to_expr(item: Union["ShapeVar", int]) -> Expr:
     if isinstance(item, int):
@@ -65,10 +62,11 @@ class TypeData:
         return f"TypeData[{self.get_name()}]"
 
     def get_name(self) -> str:
+        runtime_type_name = get_type_name(self.runtime_type)
         try:
-            return f"{self.runtime_type.__name__}[{self.get_params_repr()}]"
+            return f"{runtime_type_name}[{self.get_params_repr()}]"
         except NotImplementedError:
-            return self.runtime_type.__name__
+            return runtime_type_name
 
     def get_params_repr(self) -> str:
         raise NotImplementedError
@@ -78,10 +76,12 @@ ShapeType = Tuple[Union[int, ShapeVar], ...]
 class TensorTD(TypeData):
     """ Type data for tensor. This is what will be mostly used """
     shape: ShapeType
+    dtype: torch.dtype
 
-    def __init__(self, shape: ShapeType):
+    def __init__(self, shape: ShapeType, dtype: Type = torch.float32):
         super().__init__(torch.Tensor)
         self.shape = shape
+        self.dtype = dtype
 
     def get_params_repr(self) -> str:
         ret = []
@@ -91,4 +91,40 @@ class TensorTD(TypeData):
             else:
                 s = repr(item)
             ret.append(s)
-        return "(" + ", ".join(ret) + ")"
+        ret = "(" + ", ".join(ret) + f")"
+        # only print dtype if it ain't float
+        if self.dtype != torch.float32:
+            ret += f", dtype={str(self.dtype).split('.')[-1]}"
+        return ret
+
+class ClassTD(TypeData):
+    """ Type data for custom data types """
+
+    subtypes: Dict[str, TypeData]
+
+    def __init__(self, runtime_type, **kwargs):
+        super().__init__(runtime_type)
+        self.subtypes = {}
+        for key, val in kwargs.items():
+            self.subtypes[key] = val
+
+    def __getattr__(self, key: str) -> TypeData:
+        if key in [ "runtime_type", "subtypes" ]:
+            raise AttributeError
+        else:
+            try:
+                return self.subtypes[key]
+            except KeyError:
+                raise AttributeError
+        
+    def __setattr__(self, key: str, val: TypeData):
+        if key in [ "runtime_type", "subtypes" ]:
+            super().__setattr__(key, val)
+        else:
+            self.subtypes[key] = val
+
+    def get_params_repr(self) -> str:
+        ret = []
+        for key, val in self.subtypes.items():
+            ret.append(f"{key}={val.get_name()}")
+        return ", ".join(ret)
