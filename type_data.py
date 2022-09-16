@@ -1,79 +1,58 @@
 import torch
 from typing import Type, List, Tuple, Union
+from collections import defaultdict
 from dataclasses import dataclass
+from sympy import Symbol, Expr, Integer, symbols
 
 def default_init(cls):
     """ makes a default init function for a class """
     return dataclass(eq=False,repr=False)(cls)
 
+def to_expr(item: Union["ShapeVar", int]) -> Expr:
+    if isinstance(item, int):
+        return Integer(item)
+    else:
+        return item.expr
+
 class ShapeVar:
     """ If we don't know the dimension of something at graph time,
     put it in a shape var (e.g. batch) """
 
+    expr: Expr
+
+    def __init__(self, expr: Union[Expr, str]):
+        if isinstance(expr, str):
+            self.expr = symbols(expr, integer=True)
+        else:
+            self.expr = expr
+
     # for everything in this library, get_name is used when pretty-printing
     # or exporting models, to pdfs, __repr__ is used for regular printing
     def get_name(self) -> str:
-        raise NotImplementedError
-
-    def get_inner_name(self) -> str:
-        """ Inside math expressions we may want to put parens
-        around. This function allows that """
-        return self.get_name()
-
+        return str(self.expr)
+    
     def __repr__(self) -> str:
         return f"ShapeVar[{self.get_name()}]"
 
-    def __add__(self, other: "ShapeVar"):
-        return AddShapeVar([self, other])
+    def maybe_int(self) -> Union["ShapeVar", int]:
+        """ If the expression evals to an int, returns an int """
+        try:
+            return int(self.get_name())
+        except ValueError:
+            return self
 
-    def __sub__(self, other: "ShapeVar"):
-        return SubShapeVar([self, other])
+    def __eq__(self, other: Union["ShapeVar", int]):
+        return to_expr(other).equals(self.expr).maybe_int()
 
-    def __mul__(self, other: "ShapeVar"):
-        return MulShapeVar([self, other])
+# somewhat cursed way of generating all the operators
+def set_operator(method):
+    def op(self, other):
+        return ShapeVar(getattr(self.expr, method)(to_expr(other))).maybe_int()
+    setattr(ShapeVar, method, op)
     
-    def __floordiv__(self, other: "ShapeVar"):
-        return DivShapeVar([self, other])
-
-@default_init
-class NamedShapeVar(ShapeVar):
-    name: str
-
-    def get_name(self) -> str:
-        return self.name
-
-@default_init
-class OpShapeVar(ShapeVar):
-
-    op_name: str
-    ops: List[ShapeVar]
-
-    def get_name(self) -> str:
-        return f" {self.op_name} ".join([ s.get_inner_name() for s in self.ops ])
-
-    def get_inner_name(self) -> str:
-        return f"({self.get_name()})"
+for method in [ "__add__", "__sub__", "__mul__", "__floordiv__", "__radd__", "__rsub__", "__rmul__", "__rfloordiv__" ]:
+    set_operator(method)
     
-class AddShapeVar(OpShapeVar):
-
-    def __init__(self, ops):
-        super().__init__("+", ops)
-
-class SubShapeVar(OpShapeVar):
-
-    def __init__(self, ops):
-        super().__init__("-", ops)
-
-class MulShapeVar(OpShapeVar):
-
-    def __init__(self, ops):
-        super().__init__("*", ops)
-
-class DivShapeVar(OpShapeVar):
-
-    def __init__(self, ops):
-        super().__init__("//", ops)
-
 @default_init
 class TypeData:
     """ tabulates all the stuff we need to know about some future
@@ -97,6 +76,7 @@ class TypeData:
 ShapeType = Tuple[Union[int, ShapeVar], ...]
         
 class TensorTD(TypeData):
+    """ Type data for tensor. This is what will be mostly used """
     shape: ShapeType
 
     def __init__(self, shape: ShapeType):
