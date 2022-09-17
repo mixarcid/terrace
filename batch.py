@@ -1,8 +1,9 @@
-from typing import TypeVar, Generic, Type, Any, Dict, List, Union
+from typing import TypeVar, Generic, Type, Any, Dict, List, Union, Sequence, Optional
 
 import torch
 import torch.utils.data
 from torch.utils.data.dataloader import default_collate
+from dataclasses import dataclass
 
 from module import Module
 from type_data import ClassTD
@@ -13,6 +14,12 @@ class Batchable:
     """ Extremely hacky. Need to allow for dict and list inputs to
     modules. But proof of concept """
 
+    @staticmethod
+    def get_batch_type():
+        """ override this method if you want a custom batch type
+        for your batchable class """
+        raise NotImplementedError
+    
     @classclass
     class Module(Module):
         many_inputs = True
@@ -36,19 +43,25 @@ class Batchable:
             else:
                 return subclass(**kwargs)
 
+@dataclass
+class TypeTree:
+    type: Type
+    subtypes: Dict[str, "TypeTree"]
+            
 T = TypeVar('T')
 
 class Batch(Generic[T]):
 
-    batch_type: Type
-    batch_subtypes: Dict[str, Type]
+    type_tree: TypeTree
     batch_size: int
     store: Dict[str, Any]
 
     def __init__(self,
-                 items: Union[List[T], Type],
+                 items: Optional[Union[List[T], Type]],
                  **kwargs):
-
+        # items should only be None when we're making a blank batch
+        # and want to manually mess with things (e.g. in get and set attr)
+        if items is None: return
         if isinstance(items, type):
             self.init_from_type(items, **kwargs)
         else:
@@ -58,24 +71,33 @@ class Batch(Generic[T]):
         assert len(items) > 0
         template = items[0]
 
-        self.batch_type = type(template)
-        self.batch_subtypes = {}
+        self.type_tree = TypeTree(type(template), {})
         self.batch_size = len(items)
         self.store = {}
-        
-        for key, val in template.__dict__.items():
-            self.batch_subtypes[key] = type(val)
-            attribs = [ getattr(item, key) for item in items ]
-            self.store[key] = collate(attribs)
 
+        if isinstance(template, Batch):
+            # recursion out the wazoo
+            raise NotImplementedError
+        else:
+            for key, val in template.__dict__.items():
+                self.type_tree.subtypes[key] = TypeTree(type(val), {})
+                attribs = [ getattr(item, key) for item in items ]
+                collated = collate(attribs)
+                if isinstance(collated, Batch):
+                    self.type_tree.subtypes[key] = collated.type_tree
+                    for key2, val2 in collated.store.items():
+                        full_key = key + "/" + key2
+                        self.store[full_key] = val2
+                else:
+                    self.store[key] = collate(attribs)
+                
     def init_from_type(self, batch_type: Type, **kwargs):
-        self.batch_type = batch_type
-        self.batch_subtypes = batch_type.__annotations__
-        template_key = next(iter(self.batch_subtypes.keys()))
+        self.type_tree = TypeTree(batch_type, batch_type.__annotations__)
+        template_key = next(iter(self.type_tree.subtypes.keys()))
         self.batch_size = len(kwargs[template_key])
         self.store = {}
 
-        for key in self.batch_subtypes.keys():
+        for key in self.type_tree.subtypes.keys():
             val = kwargs[key]
             assert len(val) == self.batch_size
             setattr(self, key, val)
@@ -85,33 +107,57 @@ class Batch(Generic[T]):
         return self.batch_size
 
     def __getattr__(self, key: str) -> Any:
-        try:
-            return self.store[key]
-        except KeyError:
+        if key in [ 'type_tree', 'batch_size', 'store' ]:
             raise AttributeError
+        if key in self.store:
+            return self.store[key]
+        else:
+            if key in self.type_tree.subtypes:
+                sub_batch = Batch(None)
+                sub_batch.type_tree = self.type_tree.subtypes[key]
+                sub_batch.batch_size = len(self)
+                sub_batch.store = {}
+                for key2, val in self.store.items():
+                    if key2.startswith(key):
+                        first, *rest = key2.split("/")
+                        new_key = "/".join(rest)
+                        sub_batch.store[new_key] = val
+                return sub_batch
+            else:
+                raise AttributeError
         
     def __setattr__(self, key: str, val: Any):
-        if key in [ 'batch_type', 'batch_subtypes', 'batch_size', 'store' ]:
-            super().__setattr__(key, val)
-        else:
-            self.store[key] = val
+        # for the sake of the subclasses
+        if type(self) != Batch:
+            return super().__setattr__(key, val)
+        if key in [ 'type_tree', 'batch_size', 'store' ]:
+            return super().__setattr__(key, val)
+        self.store[key] = val
 
     def __getitem__(self, index: int) -> T:
         if index >= self.batch_size:
             raise IndexError
-        ret = self.batch_type.__new__(self.batch_type)
-        for key, val in self.store.items():
-            item = val[index]
-            item_type = self.batch_subtypes[key]
+        ret = self.type_tree.type.__new__(self.type_tree.type)
+        for key in self.type_tree.subtypes:
+            item = getattr(self, key)[index]
+            item_type = self.type_tree.subtypes[key].type
             if not isinstance(item, item_type):
                 item = item_type(item)
             setattr(ret, key, item)
         return ret
+
+def make_batch(items):
+    assert len(items) > 0
+    first = items[0]
+    try:
+        return type(first).get_batch_type()(items)
+    except NotImplementedError:
+        return Batch(items)
             
 def collate(batch: Any) -> Any:
     example = batch[0]
     if isinstance(example, Batchable):
-        return Batch(batch)
+        return make_batch(batch)
     else:
         return default_collate(batch)
 
@@ -122,3 +168,28 @@ class DataLoader(torch.utils.data.DataLoader):
             dataset, batch_size, shuffle,
             collate_fn=collate, **kwargs
         )
+
+if __name__ == "__main__":
+
+    @default_init
+    class Test(Batchable):
+        t1: torch.Tensor
+        t2: list
+
+    @default_init
+    class Test2(Batchable):
+        item1: Test
+        item2: Test
+
+    @default_init
+    class Test3(Batchable):
+        fred: Test2
+        george: Test
+
+    test = Test(torch.tensor([1,2,3]), [1,2,3])
+    test2 = Test2(test, test)
+    test3 = Test3(test2, test)
+    batch = Batch([test, test])
+    batch3 = Batch([test3, test3, test3])
+    print(batch3.george.t1)
+    
