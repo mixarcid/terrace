@@ -120,18 +120,14 @@ class GraphBatch(Batch[Graph[N, E]]):
         return ret
     
 if __name__ == "__main__":
-    from meta_utils import default_init
-    
-    @default_init
+
     class SubNTest(Batchable):
         t1: torch.Tensor
 
-    @default_init
     class NTest(Batchable):
         t1: SubNTest
         t2: torch.Tensor
     
-    @default_init
     class Edata(Batchable):
         et1: torch.Tensor
     

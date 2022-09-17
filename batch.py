@@ -7,13 +7,24 @@ from dataclasses import dataclass
 
 from module import Module
 from type_data import ClassTD
-from meta_utils import classclass, default_init
+from meta_utils import classclass
 
-@default_init
 class Batchable:
-    """ Extremely hacky. Need to allow for dict and list inputs to
-    modules. But proof of concept """
 
+    def __init__(self, *args, **kwargs):
+        """ default constructor that gets inherited """
+        # todo: add error messages
+        seen = set()
+        assert len(args) <= len(self.__annotations__)
+        for name, arg in zip(self.__annotations__.keys(), args):
+            setattr(self, name, arg)
+            seen.add(name)
+            
+        for key, val in kwargs.items():
+            assert key not in seen
+            assert key in self.__annotations__
+            setattr(self, key, val)
+            
     @staticmethod
     def get_batch_type():
         """ override this method if you want a custom batch type
@@ -22,6 +33,8 @@ class Batchable:
     
     @classclass
     class Module(Module):
+        """ Extremely hacky. Need to allow for dict and list inputs to
+        modules. But proof of concept """
         many_inputs = True
         
         def __init__(self, batch=True, **kwargs):
@@ -171,22 +184,19 @@ class DataLoader(torch.utils.data.DataLoader):
 
 if __name__ == "__main__":
 
-    @default_init
     class Test(Batchable):
         t1: torch.Tensor
         t2: list
 
-    @default_init
     class Test2(Batchable):
         item1: Test
         item2: Test
 
-    @default_init
     class Test3(Batchable):
         fred: Test2
         george: Test
 
-    test = Test(torch.tensor([1,2,3]), [1,2,3])
+    test = Test(torch.tensor([1,2,3]), t2=[1,2,3])
     test2 = Test2(test, test)
     test3 = Test3(test2, test)
     batch = Batch([test, test])
