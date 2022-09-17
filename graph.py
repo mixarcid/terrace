@@ -2,7 +2,7 @@ from typing import List, Set, Tuple, Optional, Type, TypeVar, Generic, Any
 import dgl
 import torch
 
-from batch import Batchable, Batch, TypeTree, make_batch
+from batch import Batchable, Batch, BatchBase, TypeTree, make_batch
 
 class Batchable(Batchable):
     pass
@@ -76,7 +76,7 @@ class Graph(Generic[N, E], Batchable):
         return ret
 
 
-class GraphBatch(Batch[Graph[N, E]]):
+class GraphBatch(BatchBase[Graph[N, E]]):
 
     dgl_batch: dgl.batch
     node_type_tree: TypeTree
@@ -130,7 +130,10 @@ if __name__ == "__main__":
     
     class Edata(Batchable):
         et1: torch.Tensor
-    
+
+    class TwoGraphs(Batchable):
+        g1: Graph
+        g2: Graph
     
     nodes = [ NTest(SubNTest(torch.tensor([1,0,0])), torch.tensor([0,1,0])) for n in range(10) ]
     edges = [(0,1), (1,2)]
@@ -142,3 +145,6 @@ if __name__ == "__main__":
     batch = make_batch([graph, graph])
     for g in batch:
         print(g.edata.et1)
+
+    tg = TwoGraphs(graph, graph)
+    print(make_batch([tg, tg, tg]).g1.ndata.t2)

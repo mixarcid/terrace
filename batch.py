@@ -63,7 +63,10 @@ class TypeTree:
             
 T = TypeVar('T')
 
-class Batch(Generic[T]):
+class BatchBase(Generic[T]):
+    pass
+
+class Batch(BatchBase[T]):
 
     type_tree: TypeTree
     batch_size: int
