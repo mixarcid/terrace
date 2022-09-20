@@ -2,7 +2,7 @@ from typing import List, Set, Tuple, Optional, Type, TypeVar, Generic, Any
 import dgl
 import torch
 
-from batch import Batchable, Batch, BatchBase, TypeTree, make_batch
+from .batch import Batchable, Batch, BatchBase, TypeTree, make_batch
 
 class Batchable(Batchable):
     pass
@@ -36,11 +36,13 @@ class Graph(Generic[N, E], Batchable):
         for i, (n1, n2) in enumerate(edges):
             src_list.append(n1)
             dst_list.append(n2)
-            new_edata.append(edata[i])
+            if new_edata is not None:
+                new_edata.append(edata[i])
             if not directed:
                 src_list.append(n2)
                 dst_list.append(n1)
-                new_edata.append(edata[i])
+                if new_edata is not None:
+                    new_edata.append(edata[i])
         
         self.dgl_graph = dgl.graph((torch.tensor(src_list), torch.tensor(dst_list)), num_nodes=len(nodes), idtype=torch.int32)
 
@@ -73,6 +75,13 @@ class Graph(Generic[N, E], Batchable):
         ret.batch_size = self.dgl_graph.number_of_nodes()
         ret.type_tree = self.edge_type_tree
         ret.store = self.dgl_graph.edata
+        return ret
+
+    @property
+    def edges(self) -> List[Tuple[int, int]]:
+        ret = []
+        for src, dst in zip(*self.dgl_graph.edges()):
+            ret.append((src, dst))
         return ret
 
 
@@ -117,6 +126,13 @@ class GraphBatch(BatchBase[Graph[N, E]]):
         ret.batch_size = self.dgl_batch.number_of_nodes()
         ret.type_tree = self.edge_type_tree
         ret.store = self.dgl_batch.edata
+        return ret
+
+    @property
+    def edges(self) -> List[Tuple[int, int]]:
+        ret = []
+        for src, dst in zip(*self.dgl_batch.edges()):
+            ret.append((src, dst))
         return ret
     
 if __name__ == "__main__":

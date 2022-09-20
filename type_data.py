@@ -1,9 +1,9 @@
 import torch
-from typing import Type, List, Tuple, Union, Dict, Type
+from typing import Type, List, Tuple, Union, Dict, Type, Optional
 from collections import defaultdict
 from sympy import Symbol, Expr, Integer, symbols
 
-from meta_utils import default_init, get_type_name
+from .meta_utils import default_init, get_type_name
 
 def to_expr(item: Union["ShapeVar", int]) -> Expr:
     if isinstance(item, int):
@@ -77,11 +77,17 @@ class TensorTD(TypeData):
     """ Type data for tensor. This is what will be mostly used """
     shape: ShapeType
     dtype: torch.dtype
+    # max_values are used to define the max values taken by long tensors
+    # for classification. For everything else will be None
+    max_values: Optional[List[int]]
 
-    def __init__(self, shape: ShapeType, dtype: Type = torch.float32):
+    def __init__(self, shape: ShapeType, 
+                 dtype: Type = torch.float32, 
+                 max_values: Optional[List[int]] = None):
         super().__init__(torch.Tensor)
         self.shape = shape
         self.dtype = dtype
+        self.max_values = max_values
 
     def get_params_repr(self) -> str:
         ret = []
@@ -95,6 +101,8 @@ class TensorTD(TypeData):
         # only print dtype if it ain't float
         if self.dtype != torch.float32:
             ret += f", dtype={str(self.dtype).split('.')[-1]}"
+        if self.max_values is not None:
+            ret += f", max_values={self.max_values}"
         return ret
 
 class ClassTD(TypeData):

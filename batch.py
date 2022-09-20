@@ -5,9 +5,8 @@ import torch.utils.data
 from torch.utils.data.dataloader import default_collate
 from dataclasses import dataclass
 
-from module import Module
-from type_data import ClassTD
-from meta_utils import classclass
+from .type_data import ClassTD
+from .meta_utils import classclass
 
 class Batchable:
 
@@ -30,31 +29,6 @@ class Batchable:
         """ override this method if you want a custom batch type
         for your batchable class """
         raise NotImplementedError
-    
-    @classclass
-    class Module(Module):
-        """ Extremely hacky. Need to allow for dict and list inputs to
-        modules. But proof of concept """
-        many_inputs = True
-        
-        def __init__(self, batch=True, **kwargs):
-            prev_modules = list(kwargs.values())
-            super().__init__(prev_modules, batch, kwargs.keys())
-            self.batch = batch
-
-        def get_out_types(self, batch, keys):
-            self.keys = keys
-            subclass = type(self).Owner
-            typ = Batch[subclass] if batch else subclass
-            return [ ClassTD(typ, **{ key: mod.out_type for key, mod in zip(keys, self.prev_modules) }) ]
-
-        def __call__(self, *inputs):
-            subclass = type(self).Owner
-            kwargs = { key: inp for key, inp in zip(self.keys, inputs) }
-            if self.batch:
-                return Batch(subclass, **kwargs)
-            else:
-                return subclass(**kwargs)
 
 @dataclass
 class TypeTree:
@@ -174,6 +148,14 @@ def collate(batch: Any) -> Any:
     example = batch[0]
     if isinstance(example, Batchable):
         return make_batch(batch)
+    elif isinstance(example, tuple) or isinstance(example, list):
+        ret = []
+        for i, item in enumerate(example):
+            all_items = [ b[i] for b in batch]
+            ret.append(collate(all_items))
+        return type(example)(ret)
+    elif isinstance(example, dict):
+        raise NotImplementedError()
     else:
         return default_collate(batch)
 
