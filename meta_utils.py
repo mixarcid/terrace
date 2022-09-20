@@ -1,5 +1,5 @@
 # utility functions for python metaprogramming
-
+from typing import Any, Type, Callable
 from dataclasses import dataclass
 from copy import deepcopy
 
@@ -25,3 +25,38 @@ def get_type_name(typ):
         return typ.__name__
     elif hasattr(typ, "__origin__"):
         return typ.__origin__.__name__ + "[" + ", ".join(map(get_type_name, typ.__args__)) + "]"
+
+
+def get_any_arg(*args, **kwargs):
+    """ Returns the first argument given, regardless of kwarg or not """
+    if len(args) > 0:
+        return args[0]
+    if len(kwargs) > 0:
+        return next(iter(kwargs.values))
+    raise AssertionError
+
+def contains_type(item: Any, T: Type):
+    """ Returns true if item is an instance of T or
+    is a container that contains T """
+    if isinstance(item, T):
+        return True
+    elif isinstance(item, list) or isinstance(item, tuple):
+        for i2 in item:
+            if contains_type(i2, T):
+                return True
+    elif isinstance(item, dict):
+        for i2 in item.value():
+            if contains_type(i2, T):
+                return True
+    return False
+
+def recursive_map(func: Callable, item: Any):
+    """ recurisvely applies func to all non-container
+    items in the container """
+    
+    if isinstance(item, list) or isinstance(item, tuple):
+        return type(item)([ recursive_map(func, i2) for i2 in item ])
+    elif isinstance(item, dict):
+        return { key: recursive_map(func, val) for key, val in item.items() }
+    else:
+        return func(item)
