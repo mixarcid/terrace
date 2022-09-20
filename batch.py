@@ -1,12 +1,13 @@
 from typing import TypeVar, Generic, Type, Any, Dict, List, Union, Sequence, Optional
 
+from copy import copy
 import torch
 import torch.utils.data
 from torch.utils.data.dataloader import default_collate
 from dataclasses import dataclass
 
-from .type_data import ClassTD
-from .meta_utils import classclass
+from .type_data import TypeData, ClassTD, TensorTD, ShapeVar
+from .meta_utils import classclass, get_type_name
 
 class Batchable:
 
@@ -28,7 +29,13 @@ class Batchable:
     def get_batch_type():
         """ override this method if you want a custom batch type
         for your batchable class """
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    @staticmethod
+    def get_batch_td_type():
+        """ If you're using a custom batch type, you'll also need a custom
+        BatchTD type """
+        raise NotImplementedError()
 
 @dataclass
 class TypeTree:
@@ -136,6 +143,26 @@ class Batch(BatchBase[T]):
             setattr(ret, key, item)
         return ret
 
+class BatchTD(ClassTD):
+
+    def __init__(self, type_data: ClassTD, batch_size: Union[int, ShapeVar]):
+        subtypes = {}
+        for name, subtype in type_data.subtypes.items():
+            subtypes[name] = make_batch_td(subtype, batch_size)
+        super(BatchTD, self).__init__(Batch[type_data.runtime_type], **subtypes)
+
+def make_batch_td(type_data: TypeData, 
+                  batch_size: Union[int, ShapeVar] = ShapeVar('B')) -> TypeData:
+    if isinstance(type_data, TensorTD):
+        ret = copy(type_data)
+        ret.shape = tuple([batch_size] + list(type_data.shape))
+        return ret
+    else:
+        try:
+            return type_data.runtime_type.get_batch_td_type()(type_data, batch_size)
+        except NotImplementedError:
+            return BatchTD(type_data, batch_size)
+
 def make_batch(items):
     assert len(items) > 0
     first = items[0]
@@ -166,6 +193,11 @@ class DataLoader(torch.utils.data.DataLoader):
             dataset, batch_size, shuffle,
             collate_fn=collate, **kwargs
         )
+
+    def get_type_data(self) -> TypeData:
+        """ If the dataset impliments get_type_data, this will return the
+        batchfied type data """
+        return make_batch_td(self.dataset.get_type_data())
 
 if __name__ == "__main__":
 

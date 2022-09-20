@@ -1,8 +1,9 @@
-from typing import List, Set, Tuple, Optional, Type, TypeVar, Generic, Any
+from typing import List, Set, Tuple, Optional, Type, TypeVar, Generic, Any, Union
 import dgl
 import torch
 
-from .batch import Batchable, Batch, BatchBase, TypeTree, make_batch
+from .batch import Batchable, Batch, BatchBase, TypeTree, make_batch, make_batch_td, BatchTD
+from .type_data import ClassTD, TypeData, ShapeVar
 
 class Batchable(Batchable):
     pass
@@ -19,6 +20,10 @@ class Graph(Generic[N, E], Batchable):
     @staticmethod
     def get_batch_type():
         return GraphBatch
+
+    @staticmethod
+    def get_batch_td_type():
+        return GraphBatchTD
 
     def __init__(self, nodes: List[N],
                  edges: List[Tuple[int, int]],
@@ -84,8 +89,8 @@ class Graph(Generic[N, E], Batchable):
             ret.append((src, dst))
         return ret
 
-
-class GraphBatch(BatchBase[Graph[N, E]]):
+G = TypeVar('G', bound=Graph)
+class GraphBatch(BatchBase[G]):
 
     dgl_batch: dgl.batch
     node_type_tree: TypeTree
@@ -134,6 +139,40 @@ class GraphBatch(BatchBase[Graph[N, E]]):
         for src, dst in zip(*self.dgl_batch.edges()):
             ret.append((src, dst))
         return ret
+
+class GraphTD(ClassTD):
+
+    def __init__(self, runtime_type: Type[Graph],
+                 node_td: TypeData,
+                 edge_td: TypeData,
+                 node_shapevar: Union[ShapeVar, int] = ShapeVar('N'),
+                 edge_shapevar: Union[ShapeVar, int] = ShapeVar('E')):
+        ndata = BatchTD(node_td, node_shapevar)
+        edata = BatchTD(edge_td, node_shapevar)
+        super(GraphTD, self).__init__(runtime_type, ndata=ndata, edata=edata)
+
+class GraphBatchTD(ClassTD):
+
+    batch_size: Union[ShapeVar, int]
+
+    def __init__(self, graph_td, 
+                 batch_size: Union[ShapeVar, int] = ShapeVar("B")):
+        subtypes = graph_td.subtypes
+        runtime_type = GraphBatch[graph_td.runtime_type]
+        super(GraphBatchTD, self).__init__(runtime_type, **subtypes)
+        self.batch_size = batch_size
+
+    def __getattr__(self, key: str) -> TypeData:
+        if key == "batch_size":
+            return self.__dict__[key]
+        else:
+            return super(GraphBatchTD, self).__getattr__(key)
+        
+    def __setattr__(self, key: str, val: TypeData):
+        if key == "batch_size":
+            self.__dict__[key] = val
+        else:
+            super(GraphBatchTD, self).__setattr__(key, val)
     
 if __name__ == "__main__":
 

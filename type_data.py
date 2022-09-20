@@ -62,11 +62,14 @@ class TypeData:
         return f"TypeData[{self.get_name()}]"
 
     def get_name(self) -> str:
-        runtime_type_name = get_type_name(self.runtime_type)
+        runtime_type_name = self.get_type_name()
         try:
             return f"{runtime_type_name}[{self.get_params_repr()}]"
         except NotImplementedError:
             return runtime_type_name
+
+    def get_type_name(self) -> str:
+        return get_type_name(self.runtime_type)
 
     def get_params_repr(self) -> str:
         raise NotImplementedError
