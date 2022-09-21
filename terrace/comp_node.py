@@ -20,6 +20,14 @@ class CompNode:
         exec_args = recursive_map(lambda node: node.execute(), self.args)
         exec_kwargs = recursive_map(lambda node: node.execute(), self.kwargs)
         return self.op(*exec_args, **exec_kwargs)
+
+    @property
+    def shape(self):
+        return self.out_type_data.shape
+
+    def __getitem__(self, idx):
+        op = lambda node: node[idx]
+        return CompNode([self], {}, op, self.out_type_data[idx])
     
 class Input(CompNode):
 

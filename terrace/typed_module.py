@@ -116,6 +116,7 @@ class Model(TypedModule):
         self.in_nodes = in_nodes
         self.out_nodes = out_nodes
 
+        # do bfs to determine which submodules we need to register
         self.submodules = nn.ModuleList()
         to_explore = []
         recursive_map(lambda node: to_explore.append(node), out_nodes)
@@ -130,3 +131,10 @@ class Model(TypedModule):
         for node, input in recursive_zip(self.in_nodes, inputs):
             node.set_value(input)
         return recursive_map(lambda node: node.execute(), self.out_nodes)
+
+    def wha(self):
+        print("?")
+
+    @property
+    def out_type_data(self):
+        return recursive_map(lambda node: node.out_type_data, self.out_nodes)

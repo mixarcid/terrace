@@ -1,4 +1,5 @@
 import torch
+from copy import deepcopy
 from typing import Type, List, Tuple, Union, Dict, Type, Optional
 from collections import defaultdict
 from sympy import Symbol, Expr, Integer, symbols
@@ -75,7 +76,10 @@ class TypeData:
         raise NotImplementedError
 
 ShapeType = Tuple[Union[int, ShapeVar], ...]
-        
+
+def normalize_idx(sz, idx):
+    return idx if idx > 0 else sz + idx
+
 class TensorTD(TypeData):
     """ Type data for tensor. This is what will be mostly used """
     shape: ShapeType
@@ -106,6 +110,26 @@ class TensorTD(TypeData):
             ret += f", dtype={str(self.dtype).split('.')[-1]}"
         if self.max_values is not None:
             ret += f", max_values={self.max_values}"
+        return ret
+
+    def __getitem__(self, idx) -> "TensorTD":
+        if not isinstance(idx, tuple):
+            idx = (idx,)
+        ret_shape = []
+        for i, sz in zip(idx, self.shape):
+            if isinstance(i, int):
+                continue
+            if isinstance(i, slice):
+                if i.step is not None:
+                    raise NotImplementedError()
+                start = 0 if i.start is None else normalize_idx(sz, i.start)
+                stop = sz if i.stop is None else normalize_idx(sz, i.stop)
+                if isinstance(start, int) and isinstance(stop, int):
+                    assert stop >= start
+                ret_shape.append(stop-start)
+        ret_shape += list(self.shape[len(idx):])
+        ret = deepcopy(self)
+        ret.shape = tuple(ret_shape)
         return ret
 
 class ClassTD(TypeData):
