@@ -2,13 +2,13 @@ import torch
 from torch import nn
 from typing import Type, Any, List, Tuple
 
-from type_data import TypeData, TensorTD
-from meta_utils import default_init, get_any_arg, contains_type, recursive_map
-from comp_node import CompNode
+from .type_data import TypeData, TensorTD
+from .meta_utils import default_init, get_any_arg, contains_type, recursive_map, recursive_zip
+from .comp_node import CompNode
 
-def call_with_type_data(func, type_func, *args, **kwargs):
+def call_with_type_data(func, type_func, module, *args, **kwargs):
     """ If args contain type data, use type func, else use func.
-    If comp node data, return comp node with func """
+    If comp node data, return comp node with module (which could be) """
     arg = get_any_arg(*args, **kwargs)
     if contains_type(arg, TypeData):
         return type_func(*args, **kwargs)
@@ -20,7 +20,7 @@ def call_with_type_data(func, type_func, *args, **kwargs):
         return CompNode(
             args=args,
             kwargs=kwargs,
-            op=func,
+            op=module,
             out_type_data=td
         )
     else:
@@ -46,7 +46,7 @@ class TypedModule(nn.Module):
             raise
         
     def __call__(self, *args, **kwargs):
-        return call_with_type_data(super().__call__, self.get_type_data, *args, **kwargs)
+        return call_with_type_data(super().__call__, self.get_type_data, self, *args, **kwargs)
 
 class WrapperModule(TypedModule):
     submodule: nn.Module
@@ -88,7 +88,7 @@ def wraps_function(f):
     function can take either type data or tensors """
     def wrapper(td_f):
         def inner(*args, **kwargs):
-            return call_with_type_data(f, td_f)
+            return call_with_type_data(f, td_f, f, *args, **kwargs)
         return inner
     return wrapper
             
@@ -111,13 +111,22 @@ class Model(TypedModule):
     in_nodes: Any # can be any container containing Inputs
     out_nodes: Any # can be any container containing CompNodes
 
-    # todo: optain all modules in init function so it works with autograd
     def __init__(self, in_nodes, out_nodes):
         super(Model, self).__init__()
         self.in_nodes = in_nodes
         self.out_nodes = out_nodes
-    
+
+        self.submodules = nn.ModuleList()
+        to_explore = []
+        recursive_map(lambda node: to_explore.append(node), out_nodes)
+        while len(to_explore) > 0:
+            node = to_explore.pop()
+            if isinstance(node.op, nn.Module):
+                self.submodules.append(node.op)
+            recursive_map(lambda parent: to_explore.append(parent), node.args)
+            recursive_map(lambda parent: to_explore.append(parent), node.kwargs)
+
     def forward(self, inputs):
-        # todo: use a recusive zip to allow for arbitrary containers
-        self.in_nodes.set_value(inputs)
-        return self.out_nodes.execute()
+        for node, input in recursive_zip(self.in_nodes, inputs):
+            node.set_value(input)
+        return recursive_map(lambda node: node.execute(), self.out_nodes)
