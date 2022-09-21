@@ -78,7 +78,7 @@ class TypeData:
 ShapeType = Tuple[Union[int, ShapeVar], ...]
 
 def normalize_idx(sz, idx):
-    return idx if idx > 0 else sz + idx
+    return idx if idx >= 0 else sz + idx
 
 class TensorTD(TypeData):
     """ Type data for tensor. This is what will be mostly used """
@@ -86,12 +86,15 @@ class TensorTD(TypeData):
     dtype: torch.dtype
     # max_values are used to define the max values taken by long tensors
     # for classification. For everything else will be None
+    # assume max values apply to the last axis of the tensor
     max_values: Optional[List[int]]
 
     def __init__(self, shape: ShapeType, 
                  dtype: Type = torch.float32, 
                  max_values: Optional[List[int]] = None):
         super().__init__(torch.Tensor)
+        if max_values is not None and isinstance(shape[-1], int):
+            assert len(max_values) == shape[-1]
         self.shape = shape
         self.dtype = dtype
         self.max_values = max_values
@@ -116,7 +119,13 @@ class TensorTD(TypeData):
         if not isinstance(idx, tuple):
             idx = (idx,)
         ret_shape = []
-        for i, sz in zip(idx, self.shape):
+        ret_max_values = self.max_values
+        for axis, (i, sz) in enumerate(zip(idx, self.shape)):
+            if axis == len(self.shape) - 1 and self.max_values is not None:
+                ret_max_values = self.max_values[i]
+                if isinstance(i, int):
+                    ret_max_values = [ ret_max_values ]
+
             if isinstance(i, int):
                 continue
             if isinstance(i, slice):
@@ -126,11 +135,18 @@ class TensorTD(TypeData):
                 stop = sz if i.stop is None else normalize_idx(sz, i.stop)
                 if isinstance(start, int) and isinstance(stop, int):
                     assert stop >= start
+                    assert stop <= sz
                 ret_shape.append(stop-start)
         ret_shape += list(self.shape[len(idx):])
         ret = deepcopy(self)
         ret.shape = tuple(ret_shape)
+        ret.max_values = ret_max_values
         return ret
+
+    @property
+    def max_value(self):
+        assert self.max_values is not None and len(self.max_values) == 1
+        return self.max_values[0]
 
 class ClassTD(TypeData):
     """ Type data for custom data types """

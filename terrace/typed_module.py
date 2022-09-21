@@ -70,6 +70,15 @@ class Linear(WrapperModule):
         assert in_feats == self.in_feats
         return (batch, self.out_feats)
 
+class Embedding(WrapperModule):
+
+    def __init__(self, num_embed, embed_dim, *args, **kwargs):
+        super(Embedding, self).__init__(nn.Embedding(num_embed, embed_dim, *args, **kwargs))
+        self.embed_dim = embed_dim
+
+    def get_shape(self, tdata):
+        return tuple(list(tdata.shape) + [self.embed_dim])
+
 class Activation(WrapperModule):
 
     def __init__(self, act):

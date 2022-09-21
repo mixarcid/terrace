@@ -1,6 +1,6 @@
 from typing import *
 
-from .typed_module import TypedModule, Linear
+from .typed_module import TypedModule, Linear, Embedding
 from .comp_node import CompNode
 
 class MakeModule:
@@ -10,6 +10,7 @@ class MakeModule:
     def get_module(*args, **kwargs) -> TypedModule:
         raise NotImplementedError()
 
+    # todo: these should input _types_, not compnodes directly
     def __call__(self, *args, **kwargs) -> CompNode:
         module = self.get_module(*args, **kwargs)
         return module(*args, **kwargs)
@@ -27,3 +28,9 @@ class MakeLinear(MakeWrapper):
 
     def get_module(self, in_node: CompNode) -> Linear:
         return Linear(in_node.shape[-1], *self.args, **self.kwargs)
+
+class MakeEmbedding(MakeWrapper):
+
+    def get_module(self, in_node: CompNode) -> Embedding:
+        embed_dim = in_node.out_type_data.max_value
+        return  Embedding(embed_dim, *self.args, **self.kwargs)
