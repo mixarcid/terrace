@@ -143,6 +143,13 @@ class Batch(BatchBase[T]):
             setattr(ret, key, item)
         return ret
 
+    def to(self, device):
+        ret = Batch(None)
+        ret.type_tree = self.type_tree
+        ret.batch_size =  self.batch_size
+        ret.store = { key: val.to(device) for key, val in self.store.items() }
+        return ret
+
 class BatchTD(ClassTD):
 
     def __init__(self, type_data: ClassTD, batch_size: Union[int, ShapeVar]):

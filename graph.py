@@ -89,6 +89,13 @@ class Graph(Generic[N, E], Batchable):
             ret.append((src, dst))
         return ret
 
+    def to(self, device):
+        ret = Graph.__new__(GraphBatch)
+        ret.node_type_tree = self.node_type_tree
+        ret.edge_type_tree = self.edge_type_tree
+        ret.dgl_batch = self.dgl_graph.to(device)
+        return ret
+
 G = TypeVar('G', bound=Graph)
 class GraphBatch(BatchBase[G]):
 
@@ -138,6 +145,13 @@ class GraphBatch(BatchBase[G]):
         ret = []
         for src, dst in zip(*self.dgl_batch.edges()):
             ret.append((src, dst))
+        return ret
+
+    def to(self, device):
+        ret = GraphBatch.__new__(GraphBatch)
+        ret.node_type_tree = self.node_type_tree
+        ret.edge_type_tree = self.edge_type_tree
+        ret.dgl_batch = self.dgl_batch.to(device)
         return ret
 
 class GraphTD(ClassTD):

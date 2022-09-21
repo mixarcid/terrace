@@ -2,8 +2,8 @@ import torch
 from torch import nn
 from typing import Callable, Any, List, Dict
 
-from type_data import TypeData, TensorTD
-from meta_utils import default_init, recursive_map
+from .type_data import TypeData, TensorTD
+from .meta_utils import default_init, recursive_map
 
 @default_init
 class CompNode:
