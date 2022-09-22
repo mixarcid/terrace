@@ -9,13 +9,15 @@ from .comp_node import CompNode
 def call_with_type_data(func, type_func, module, *args, **kwargs):
     """ If args contain type data, use type func, else use func.
     If comp node data, return comp node with module (which could be) """
-    arg = get_any_arg(*args, **kwargs)
-    if contains_type(arg, TypeData):
+    # arg = get_any_arg(*args, **kwargs)
+    # todo: better way to determine if we're being called with a type or not?
+    if contains_type(args, TypeData) or contains_type(kwargs, TypeData):
         return type_func(*args, **kwargs)
-    elif contains_type(arg, CompNode):
-        # todo: doesn't work. Need the in types, not the in nodes
-        type_args = recursive_map(lambda node: node.out_type_data, args)
-        type_kwargs = recursive_map(lambda node: node.out_type_data, kwargs)
+    elif contains_type(args, CompNode) or contains_type(kwargs, CompNode):
+        def to_type(node):
+            return node.out_type_data # if isinstance(node, TypeData) else node
+        type_args = recursive_map(to_type, args)
+        type_kwargs = recursive_map(to_type, kwargs)
         td = type_func(*type_args, **type_kwargs)
         return CompNode(
             args=args,
@@ -79,6 +81,40 @@ class Embedding(WrapperModule):
     def get_shape(self, tdata):
         return tuple(list(tdata.shape) + [self.embed_dim])
 
+
+class MultiheadAttention(WrapperModule):
+
+    def get_dims(self,
+                 embed_dim,
+                 num_heads,
+                 dropout=0.0,
+                 bias=True,
+                 add_bias_kv=False,
+                 add_zero_attn=False,
+                 kdim=None,
+                 vdim=None, 
+                 batch_first=False, 
+                 device=None, 
+                 dtype=None):
+        kdim = embed_dim if kdim is None else kdim
+        vdim = embed_dim if vdim is None else vdim
+        return embed_dim, kdim, vdim
+
+    def __init__(self, *args, **kwargs):
+        super(MultiheadAttention, self).__init__(nn.MultiheadAttention(*args, **kwargs))
+        embed_dim, kdim, vdim = self.get_dims(*args, **kwargs)
+        self.embed_dim = embed_dim
+        self.kdim = kdim
+        self.vdim = vdim
+
+    def get_type_data(self, qt, kt, vt):
+        # for now, only considering unbatched case all tensors shape (L, E)
+        L, Eq = qt.shape
+        S, Ek = kt.shape
+        shape1 = (L, self.embed_dim)
+        shape2 = (L, S)
+        return TensorTD(shape1), TensorTD(shape2)
+
 class Activation(WrapperModule):
 
     def __init__(self, act):
@@ -91,6 +127,11 @@ class ReLU(Activation):
 
     def __init__(self, *args, **kwargs):
         super(ReLU, self).__init__(nn.ReLU(*args, **kwargs))
+
+class BatchNorm1d(Activation):
+
+    def __init__(self, *args, **kwargs):
+        super(BatchNorm1d, self).__init__(nn.BatchNorm1d(*args, **kwargs))
 
 def wraps_function(f):
     """ Wraps a get_type_data function with f so the resulting
@@ -141,8 +182,8 @@ class Model(TypedModule):
             node.set_value(input)
         return recursive_map(lambda node: node.execute(), self.out_nodes)
 
-    def wha(self):
-        print("?")
+    def get_type_data(self, in_td, out_td):
+        return self.out_type_data
 
     @property
     def out_type_data(self):

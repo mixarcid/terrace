@@ -115,6 +115,9 @@ class TensorTD(TypeData):
             ret += f", max_values={self.max_values}"
         return ret
 
+    def __len__(self):
+        return 1
+
     def __getitem__(self, idx) -> "TensorTD":
         if not isinstance(idx, tuple):
             idx = (idx,)

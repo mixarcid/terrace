@@ -45,7 +45,7 @@ def contains_type(item: Any, T: Type):
             if contains_type(i2, T):
                 return True
     elif isinstance(item, dict):
-        for i2 in item.value():
+        for i2 in item.values():
             if contains_type(i2, T):
                 return True
     return False
