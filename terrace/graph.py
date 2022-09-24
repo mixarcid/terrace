@@ -106,6 +106,7 @@ class GraphBatch(BatchBase[G]):
     def __init__(self, items: List[Graph[N, E]]):
         assert len(items) > 0
         first = items[0]
+        self.graph_type = type(first)
         self.node_type_tree = first.node_type_tree
         self.edge_type_tree = first.edge_type_tree
         self.dgl_batch = dgl.batch([ item.dgl_graph for item in items ])
@@ -116,7 +117,7 @@ class GraphBatch(BatchBase[G]):
     def __getitem__(self, index: int) -> Graph[N, E]:
         if index >= len(self):
             raise IndexError
-        ret = Graph.__new__(Graph)
+        ret = self.graph_type.__new__(self.graph_type)
         ret.dgl_graph = dgl.unbatch(self.dgl_batch)[index]
         ret.node_type_tree = self.node_type_tree
         ret.edge_type_tree = self.edge_type_tree

@@ -138,8 +138,8 @@ class Batch(BatchBase[T]):
         for key in self.type_tree.subtypes:
             item = getattr(self, key)[index]
             item_type = self.type_tree.subtypes[key].type
-            if not isinstance(item, item_type):
-                item = item_type(item)
+            # if not isinstance(item, item_type):
+            #    item = item_type(item)
             setattr(ret, key, item)
         return ret
 
