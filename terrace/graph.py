@@ -100,6 +100,7 @@ G = TypeVar('G', bound=Graph)
 class GraphBatch(BatchBase[G]):
 
     dgl_batch: dgl.batch
+    graph_type: Type[Graph]
     node_type_tree: TypeTree
     edge_type_tree: Optional[TypeTree]
     
@@ -150,6 +151,7 @@ class GraphBatch(BatchBase[G]):
 
     def to(self, device):
         ret = GraphBatch.__new__(GraphBatch)
+        ret.graph_type = self.graph_type
         ret.node_type_tree = self.node_type_tree
         ret.edge_type_tree = self.edge_type_tree
         ret.dgl_batch = self.dgl_batch.to(device)
