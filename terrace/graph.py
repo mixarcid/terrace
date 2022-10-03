@@ -49,7 +49,7 @@ class Graph(Generic[N, E], Batchable):
                 if new_edata is not None:
                     new_edata.append(edata[i])
         
-        self.dgl_graph = dgl.graph((torch.tensor(src_list), torch.tensor(dst_list)), num_nodes=len(nodes), idtype=torch.int32)
+        self.dgl_graph = dgl.graph((torch.tensor(src_list), torch.tensor(dst_list)), num_nodes=len(nodes), idtype=torch.int32, device='cpu')
 
         node_batch = Batch(nodes)
         self.node_type_tree = node_batch.type_tree
@@ -77,7 +77,7 @@ class Graph(Generic[N, E], Batchable):
         if self.edge_type_tree is None:
             raise AttributeError
         ret = Batch(None)
-        ret.batch_size = self.dgl_graph.number_of_nodes()
+        ret.batch_size = self.dgl_graph.number_of_edges()
         ret.type_tree = self.edge_type_tree
         ret.store = self.dgl_graph.edata
         return ret
@@ -137,7 +137,7 @@ class GraphBatch(BatchBase[G]):
         if self.edge_type_tree is None:
             raise AttributeError
         ret = Batch(None)
-        ret.batch_size = self.dgl_batch.number_of_nodes()
+        ret.batch_size = self.dgl_batch.number_of_edges()
         ret.type_tree = self.edge_type_tree
         ret.store = self.dgl_batch.edata
         return ret
@@ -150,6 +150,7 @@ class GraphBatch(BatchBase[G]):
         return ret
 
     def to(self, device):
+        from multiprocessing import current_process
         ret = GraphBatch.__new__(GraphBatch)
         ret.graph_type = self.graph_type
         ret.node_type_tree = self.node_type_tree
@@ -166,7 +167,7 @@ class GraphTD(ClassTD):
                  edge_shapevar: Union[ShapeVar, int] = ShapeVar('E')):
         ndata = BatchTD(node_td, node_shapevar)
         edata = BatchTD(edge_td, node_shapevar)
-        super(GraphTD, self).__init__(runtime_type, ndata=ndata, edata=edata)
+        super().__init__(runtime_type, ndata=ndata, edata=edata)
 
 class GraphBatchTD(ClassTD):
 
@@ -176,20 +177,20 @@ class GraphBatchTD(ClassTD):
                  batch_size: Union[ShapeVar, int] = ShapeVar("B")):
         subtypes = graph_td.subtypes
         runtime_type = GraphBatch[graph_td.runtime_type]
-        super(GraphBatchTD, self).__init__(runtime_type, **subtypes)
+        super().__init__(runtime_type, **subtypes)
         self.batch_size = batch_size
 
     def __getattr__(self, key: str) -> TypeData:
         if key == "batch_size":
             return self.__dict__[key]
         else:
-            return super(GraphBatchTD, self).__getattr__(key)
+            return super().__getattr__(key)
         
     def __setattr__(self, key: str, val: TypeData):
         if key == "batch_size":
             self.__dict__[key] = val
         else:
-            super(GraphBatchTD, self).__setattr__(key, val)
+            super().__setattr__(key, val)
     
 if __name__ == "__main__":
 
