@@ -45,7 +45,7 @@ def contains_type(item: Any, T: Type):
             if contains_type(i2, T):
                 return True
     elif isinstance(item, dict):
-        for i2 in item.value():
+        for i2 in item.values():
             if contains_type(i2, T):
                 return True
     return False
@@ -60,3 +60,17 @@ def recursive_map(func: Callable, item: Any):
         return { key: recursive_map(func, val) for key, val in item.items() }
     else:
         return func(item)
+
+def recursive_zip(c1, c2):
+    """ c1 and c2 are arbitrary containers. They must have the same
+    "same" e.g. lists have the same len, dicts have the same keys etc.
+    this yeilds the zipped leaves of c1 and c2"""
+    
+    if isinstance(c1, list) or isinstance(c1, tuple):
+        for i1, i2 in zip(c1, c2):
+            for tup in recursive_zip(i1, i2): yield tup
+    elif isinstance(c1, dict):
+        for key in c1:
+            for tup in recursive_zip(c1[key], c2[key]): yield tup
+    else:
+        yield c1, c2

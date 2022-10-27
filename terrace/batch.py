@@ -7,7 +7,7 @@ from torch.utils.data.dataloader import default_collate
 from dataclasses import dataclass
 
 from .type_data import TypeData, ClassTD, TensorTD, ShapeVar
-from .meta_utils import classclass, get_type_name
+from .meta_utils import classclass, get_type_name, default_init
 
 class Batchable:
 
@@ -138,8 +138,8 @@ class Batch(BatchBase[T]):
         for key in self.type_tree.subtypes:
             item = getattr(self, key)[index]
             item_type = self.type_tree.subtypes[key].type
-            if not isinstance(item, item_type):
-                item = item_type(item)
+            # if not isinstance(item, item_type):
+            #    item = item_type(item)
             setattr(ret, key, item)
         return ret
 
@@ -150,6 +150,17 @@ class Batch(BatchBase[T]):
         ret.store = { key: val.to(device) for key, val in self.store.items() }
         return ret
 
+@default_init
+class BatchIter:
+    batch_td: "BatchTD"
+    index: int
+
+    def __next__(self):
+        if self.index != 0:
+            raise StopIteration()
+        self.index += 1
+        return self.batch_td[0]
+
 class BatchTD(ClassTD):
 
     def __init__(self, type_data: ClassTD, batch_size: Union[int, ShapeVar]):
@@ -158,9 +169,21 @@ class BatchTD(ClassTD):
             subtypes[name] = make_batch_td(subtype, batch_size)
         super(BatchTD, self).__init__(Batch[type_data.runtime_type], **subtypes)
 
+    def __getitem__(self, index):
+        runtime_type = self.runtime_type.__args__[0]
+        subtypes = {}
+        for name, subtype in self.subtypes.items():
+            subtypes[name] = subtype[index]
+        return ClassTD(runtime_type, **subtypes)
+
+    def __iter__(self):
+        return BatchIter(self, 0)
+
 def make_batch_td(type_data: TypeData, 
                   batch_size: Union[int, ShapeVar] = ShapeVar('B')) -> TypeData:
-    if isinstance(type_data, TensorTD):
+    if isinstance(type_data, tuple):
+        return tuple(make_batch_td(item) for item in type_data)
+    elif isinstance(type_data, TensorTD):
         ret = copy(type_data)
         ret.shape = tuple([batch_size] + list(type_data.shape))
         return ret
