@@ -1,0 +1,3 @@
+# Terrace
+
+This is a (currently disorganized and under development) bunch of high-level utilities that I've been using in personal projects to make PyTorch easier to work with. I have not yet documented anything, primarily because I have plans for a big rewrite. I hope other people find this useful one day, but I doubt that day is today...
