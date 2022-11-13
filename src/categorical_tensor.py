@@ -52,6 +52,14 @@ def cat(inputs: Tuple[CategoricalTensor, ...], axis: int = -1) -> CategoricalTen
         max_values += t.max_values
     return CategoricalTensor(tensor, max_values)
 
+@implements(torch.stack)
+def stack(inputs: Tuple[CategoricalTensor, ...]):
+    assert len(inputs) > 0
+    max_values = inputs[0].max_values
+    for t in inputs:
+        assert t.max_values == max_values
+    return CategoricalTensor(torch.stack([t.tensor for t in inputs]), max_values)
+
 @implements(torch.Tensor.__getitem__)
 def getitem(t: CategoricalTensor, idx: int):
     max_values = t.max_values
