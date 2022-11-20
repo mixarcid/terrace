@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.categorical_tensor import CategoricalTensor
+from .categorical_tensor import CategoricalTensor
 
 class Module(nn.Module):
 

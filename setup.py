@@ -5,14 +5,18 @@ with open("README.md", "r") as fh:
     
 setuptools.setup(
     name="terrace",
-    version="0.0.1",
+    version="0.0.4",
     author="Michael Brocidiacono",
     author_email="",
     description="high level PyTorch utils",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/mixarcid/terrace",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(
+        where='src',
+        include=['*'],
+    ),
+    package_dir={"": "src"},
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",

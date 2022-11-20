@@ -7,7 +7,7 @@ from torch.utils.data.dataloader import default_collate
 from dataclasses import dataclass
 
 from .type_data import TypeData, ClassTD, TensorTD, ShapeVar
-from .meta_utils import classclass, get_type_name, default_init
+from .meta_utils import classclass, get_type_name, default_init, recursive_map
 
 class Batchable:
 
@@ -147,7 +147,7 @@ class Batch(BatchBase[T]):
         ret = Batch(None)
         ret.type_tree = self.type_tree
         ret.batch_size =  self.batch_size
-        ret.store = { key: val.to(device) for key, val in self.store.items() }
+        ret.store = { key: recursive_map(lambda x: x.to(device), val) for key, val in self.store.items() }
         return ret
 
 @default_init
@@ -198,7 +198,7 @@ def make_batch(items):
     first = items[0]
     try:
         return type(first).get_batch_type()(items)
-    except NotImplementedError:
+    except (NotImplementedError, AttributeError):
         return Batch(items)
             
 def collate(batch: Any) -> Any:
