@@ -51,7 +51,11 @@ class Graph(Generic[N, E], Batchable):
         
         self.dgl_graph = dgl.graph((torch.tensor(src_list), torch.tensor(dst_list)), num_nodes=len(nodes), idtype=torch.int32, device='cpu')
 
-        node_batch = Batch(nodes)
+        if isinstance(nodes, Batch):
+            node_batch = nodes
+        else:
+            node_batch = Batch(nodes)
+       
         self.node_type_tree = node_batch.type_tree
         for key, val in node_batch.store.items():
             self.dgl_graph.ndata[key] = val
