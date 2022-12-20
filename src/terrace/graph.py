@@ -41,13 +41,18 @@ class Graph(Generic[N, E], Batchable):
         for i, (n1, n2) in enumerate(edges):
             src_list.append(n1)
             dst_list.append(n2)
-            if new_edata is not None:
-                new_edata.append(edata[i])
+            # if new_edata is not None:
+            #     new_edata.append(edata[i])
             if not directed:
                 src_list.append(n2)
                 dst_list.append(n1)
                 if new_edata is not None:
                     new_edata.append(edata[i])
+                    new_edata.append(edata[i])
+        
+        if directed and edata is not None:
+            assert new_edata == []
+            new_edata = edata
         
         self.dgl_graph = dgl.graph((torch.tensor(src_list), torch.tensor(dst_list)), num_nodes=len(nodes), idtype=torch.int32, device='cpu')
 
@@ -61,7 +66,10 @@ class Graph(Generic[N, E], Batchable):
             self.dgl_graph.ndata[key] = val
 
         if new_edata is not None:
-            edge_batch = Batch(new_edata)
+            if isinstance(new_edata, Batch):
+                edge_batch = new_edata
+            else:
+                edge_batch = Batch(new_edata)
             self.edge_type_tree = edge_batch.type_tree
             for key, val in edge_batch.store.items():
                 self.dgl_graph.edata[key] = val
@@ -90,7 +98,7 @@ class Graph(Generic[N, E], Batchable):
     def edges(self) -> List[Tuple[int, int]]:
         ret = []
         for src, dst in zip(*self.dgl_graph.edges()):
-            ret.append((src, dst))
+            ret.append((int(src), int(dst)))
         return ret
 
     def to(self, device):
