@@ -23,6 +23,14 @@ class Module(nn.Module):
         self.submodule_index += 1
         return submod
 
+    def is_initialized(self):
+        return self.initialized or self.submodule_index > 0
+
+    @property
+    def parameters(self, recurse: bool = True):
+        assert self.is_initialized(), "Terrace Module needs to be run on data before parameters method can be called"
+        return super().parameters(recurse)
+
 class WrapperModule(Module):
 
     def __init__(self, *args, **kwargs):
@@ -48,9 +56,9 @@ class LazyEmbedding(Module):
 
     def forward(self, x: CategoricalTensor):
         self.start_forward()
-        embedding_dims = [self.embedding_dims]*len(x.max_values) if isinstance(self.embedding_dims, int) else self.embedding_dims
+        embedding_dims = [self.embedding_dims]*len(x.num_classes) if isinstance(self.embedding_dims, int) else self.embedding_dims
         ret = []
         for idx in range(x.shape[-1]):
-            max_val = x.max_values[idx]
+            max_val = x.num_classes[idx]
             ret.append(self.make(nn.Embedding, max_val, embedding_dims[idx])(x.tensor[..., idx]))
         return torch.cat(ret, -1)

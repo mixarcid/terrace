@@ -8,22 +8,26 @@ from torch.utils._pytree import tree_map
 
 # https://colab.research.google.com/drive/1MLeSCMrc6a5Yf_6uAh0bH-IPf5c_BTQf#scrollTo=dM0sl2X6epBX
 
+NumClassesType = Union[int, Tuple[int, ...]]
 
 HANDLED_FUNCTIONS = {}
-# assume max values apply to the last axis of the tensor
+# if num_classes is a tuple, it decribes the number of classes along the last
+# dimension of the tensor
 class CategoricalTensor(torch.Tensor):
     @staticmethod
-    def __new__(cls, tensor: torch.Tensor, max_values: Tuple[int]):
+    def __new__(cls, tensor: torch.Tensor, num_classes: NumClassesType):
         return torch.Tensor._make_subclass(cls, tensor.to('meta'))
 
-    def __init__(self, tensor, max_values: Tuple[int]):
+    def __init__(self, tensor, num_classes: NumClassesType):
         assert tensor.dtype == torch.long
-        assert len(max_values) == tensor.size(-1)
+        if isinstance(num_classes, int):
+            num_classes = tuple([num_classes]*tensor.shape[-1])
+        assert len(num_classes) == tensor.shape[-1]
         self.tensor = tensor
-        self.max_values = max_values
+        self.num_classes = num_classes
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(tensor={self.tensor}, max_values={self.max_values})"
+        return f"{self.__class__.__name__}(tensor={self.tensor}, num_classes={self.num_classes})"
 
     # Only difference with above is to add this function.
     @classmethod
@@ -47,31 +51,31 @@ def cat(inputs: Tuple[CategoricalTensor, ...], axis: int = -1) -> CategoricalTen
     
     assert axis == -1 # for now
     tensor = torch.cat([t.tensor for t in inputs], axis)
-    max_values = []
+    num_classes = []
     for t in inputs:
-        max_values += t.max_values
-    return CategoricalTensor(tensor, max_values)
+        num_classes += t.num_classes
+    return CategoricalTensor(tensor, num_classes)
 
 @implements(torch.stack)
 def stack(inputs: Tuple[CategoricalTensor, ...]):
     assert len(inputs) > 0
-    max_values = inputs[0].max_values
+    num_classes = inputs[0].num_classes
     for t in inputs:
-        assert t.max_values == max_values
-    return CategoricalTensor(torch.stack([t.tensor for t in inputs]), max_values)
+        assert t.num_classes == num_classes
+    return CategoricalTensor(torch.stack([t.tensor for t in inputs]), num_classes)
 
 @implements(torch.Tensor.__getitem__)
 def getitem(t: CategoricalTensor, idx: int):
-    max_values = t.max_values
+    num_classes = t.num_classes
     if isinstance(idx, tuple):
         if len(idx) == len(t.shape):
-            max_values = t.max_values[idx[-1]]
+            num_classes = t.num_classes[idx[-1]]
     else:
         if len(t.shape) == 1:
-            max_values = t.max_values[idx]
-    if isinstance(max_values, int):
-        max_values = [ max_values ]
-    return CategoricalTensor(t.tensor[idx], max_values)
+            num_classes = t.num_classes[idx]
+    if isinstance(num_classes, int):
+        num_classes = [ num_classes ]
+    return CategoricalTensor(t.tensor[idx], num_classes)
 
 @implements(torch.Tensor.shape.__get__)
 def get_shape(t: CategoricalTensor):
