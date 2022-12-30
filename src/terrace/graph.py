@@ -76,6 +76,9 @@ class Graph(Generic[N, E], Batchable):
         else:
             self.edge_type_tree = None
 
+        # hacky fix for https://github.com/dmlc/dgl/issues/3802
+        self.dgl_graph.create_formats_()
+
     @property
     def ndata(self) -> Batch[N]:
         ret = Batch(None)
