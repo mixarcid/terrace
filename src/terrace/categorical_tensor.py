@@ -29,6 +29,12 @@ class CategoricalTensor(torch.Tensor):
     def __repr__(self):
         return f"{self.__class__.__name__}(tensor={self.tensor}, num_classes={self.num_classes})"
 
+    def __getstate__(self):
+        return (self.tensor, self.num_classes)
+
+    def __setstate__(self, state):
+        self.tensor, self.num_classes = state
+
     # Only difference with above is to add this function.
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -36,7 +42,8 @@ class CategoricalTensor(torch.Tensor):
             kwargs = {}
         if func in HANDLED_FUNCTIONS:
             return HANDLED_FUNCTIONS[func](*args, **kwargs)
-        raise NotImplementedError()
+        # return func(*args, **kwargs)
+        raise NotImplementedError(func)
 
 def implements(torch_function):
     """Register a torch function override for ScalarTensor"""
@@ -46,14 +53,32 @@ def implements(torch_function):
         return func
     return decorator
 
+@implements(torch.Tensor.__len__)
+def cat_tensor_len(ct):
+    return len(ct.tensor)
+
+def construct_cat_tensor(*args):
+    num_classes, tensor_args = args
+    tensor = tensor_args[0](*tensor_args[1])
+    return CategoricalTensor(tensor, num_classes)
+
+@implements(torch.Tensor.__reduce_ex__)
+def cat_reduce_ex(self, proto):
+    return (construct_cat_tensor, (self.num_classes, self.tensor.__reduce_ex__(proto)))
+
 @implements(torch.cat)
-def cat(inputs: Tuple[CategoricalTensor, ...], axis: int = -1) -> CategoricalTensor:
-    
-    assert axis == -1 # for now
-    tensor = torch.cat([t.tensor for t in inputs], axis)
-    num_classes = []
-    for t in inputs:
-        num_classes += t.num_classes
+def cat(inputs: Tuple[CategoricalTensor, ...], dim: int = -1) -> CategoricalTensor:
+    if dim < 0:
+        dim = len(inputs[0].shape) - dim
+    if dim == len(inputs[0].shape):
+        num_classes = []
+        for t in inputs:
+            num_classes += t.num_classes
+    else:
+        num_classes = inputs[0].num_classes
+        for inp in inputs:
+            assert inp.num_classes == num_classes
+    tensor = torch.cat([t.tensor for t in inputs], dim)
     return CategoricalTensor(tensor, num_classes)
 
 @implements(torch.stack)

@@ -39,7 +39,7 @@ class WrapperModule(Module):
         self.kwargs = kwargs
 
 class LazyLinear(WrapperModule):
-    """ torch >=1.13 has this, but wanted to try my hand at implimenting it myself
+    """ torch >=1.13 has this, but wanted to try my hand at implementing it myself
     (and ensuring that older torch versions work) """
 
     def forward(self, x):

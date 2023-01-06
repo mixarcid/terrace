@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Type, Any, Dict, List, Union, Sequence, Optional
+from typing import TypeVar, Generic, Type, Any, Dict, List, Union, Sequence, Optional, get_type_hints
 
 from copy import copy
 import torch
@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from .type_data import TypeData, ClassTD, TensorTD, ShapeVar
 from .meta_utils import classclass, get_type_name, default_init, recursive_map
+from .categorical_tensor import CategoricalTensor
 
 class Batchable:
 
@@ -15,14 +16,14 @@ class Batchable:
         """ default constructor that gets inherited """
         # todo: add error messages
         seen = set()
-        assert len(args) <= len(self.__annotations__)
-        for name, arg in zip(self.__annotations__.keys(), args):
+        assert len(args) <= len(get_type_hints(self))
+        for name, arg in zip(get_type_hints(self).keys(), args):
             setattr(self, name, arg)
             seen.add(name)
             
         for key, val in kwargs.items():
             assert key not in seen
-            assert key in self.__annotations__
+            assert key in get_type_hints(self)
             setattr(self, key, val)
             
     @staticmethod
@@ -79,17 +80,22 @@ class Batch(BatchBase[T]):
             for key, val in template.__dict__.items():
                 self.type_tree.subtypes[key] = TypeTree(type(val), {})
                 attribs = [ getattr(item, key) for item in items ]
-                collated = collate(attribs)
+                # subclasses can define custom collate methods
+                collate_method = "collate_" + key
+                if hasattr(type(template), collate_method):
+                    collated = getattr(type(template), collate_method)(attribs)
+                else:
+                    collated = collate(attribs)
                 if isinstance(collated, Batch):
                     self.type_tree.subtypes[key] = collated.type_tree
                     for key2, val2 in collated.store.items():
                         full_key = key + "/" + key2
                         self.store[full_key] = val2
                 else:
-                    self.store[key] = collate(attribs)
+                    self.store[key] = collated
                 
     def init_from_type(self, batch_type: Type, **kwargs):
-        self.type_tree = TypeTree(batch_type, batch_type.__annotations__)
+        self.type_tree = TypeTree(batch_type, get_type_hints(batch_type))
         template_key = next(iter(self.type_tree.subtypes.keys()))
         self.batch_size = len(kwargs[template_key])
         self.store = {}
@@ -213,8 +219,13 @@ def collate(batch: Any) -> Any:
         return type(example)(ret)
     elif isinstance(example, dict):
         raise NotImplementedError()
+    elif isinstance(example, CategoricalTensor):
+        return torch.stack(batch)
     else:
-        return default_collate(batch)
+        try:
+            return default_collate(batch)
+        except TypeError:
+            return batch
 
 class DataLoader(torch.utils.data.DataLoader):
     
