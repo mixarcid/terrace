@@ -26,7 +26,6 @@ class Module(nn.Module):
     def is_initialized(self):
         return self.initialized or self.submodule_index > 0
 
-    @property
     def parameters(self, recurse: bool = True):
         assert self.is_initialized(), "Terrace Module needs to be run on data before parameters method can be called"
         return super().parameters(recurse)

@@ -53,14 +53,28 @@ def implements(torch_function):
         return func
     return decorator
 
+@implements(torch.split)
+def split(ct, *args, **kwargs):
+    """ No error checking for now"""
+    ret = torch.split(ct.tensor, *args, **kwargs)
+    return [ CategoricalTensor(t, ct.num_classes) for t in ret ]
+
 @implements(torch.Tensor.__len__)
 def cat_tensor_len(ct):
     return len(ct.tensor)
 
+@implements(torch.Tensor.cuda)
+def cuda(ct):
+    return CategoricalTensor(ct.tensor.cuda(), num_classes=ct.num_classes)
+
+@implements(torch.Tensor.to)
+def to(ct, device):
+    return CategoricalTensor(ct.tensor.to(device), num_classes=ct.num_classes)
+
 def construct_cat_tensor(*args):
-    num_classes, tensor_args = args
-    tensor = tensor_args[0](*tensor_args[1])
-    return CategoricalTensor(tensor, num_classes)
+    num_classes, (tensor_func, tensor_args) = args
+    tensor = tensor_func(*tensor_args)
+    return CategoricalTensor(tensor, num_classes=num_classes)
 
 @implements(torch.Tensor.__reduce_ex__)
 def cat_reduce_ex(self, proto):
