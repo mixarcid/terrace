@@ -35,6 +35,17 @@ class Batchable:
 class TypeTree:
     type: Type
     subtypes: Dict[str, "TypeTree"]
+
+def make_type_tree(type_):
+    # todo: hmmm this doesn't make sense
+    if issubclass(type_, Batchable):
+        try:
+            type_.get_batch_type()
+            return TypeTree(type_, {})
+        except NotImplementedError:
+            pass
+    subtypes = { key: make_type_tree(val) for key, val in get_type_hints(type_).items() }
+    return TypeTree(type_, subtypes)
             
 T = TypeVar('T')
 
@@ -88,7 +99,9 @@ class Batch(BatchBase[T]):
                     self.store[key] = collated
                 
     def init_from_type(self, batch_type: Type, **kwargs):
-        self.type_tree = TypeTree(batch_type, get_type_hints(batch_type))
+        # self.type_tree = TypeTree(batch_type, get_type_hints(batch_type))
+        # self.type_tree = TypeTree(batch_type, {})
+        self.type_tree = make_type_tree(batch_type)
         template_key = next(iter(self.type_tree.subtypes.keys()))
         self.batch_size = len(kwargs[template_key])
         self.store = {}
@@ -96,6 +109,7 @@ class Batch(BatchBase[T]):
         for key in self.type_tree.subtypes.keys():
             val = kwargs[key]
             assert len(val) == self.batch_size
+
             setattr(self, key, val)
             
 
@@ -120,7 +134,7 @@ class Batch(BatchBase[T]):
                         sub_batch.store[new_key] = val
                 return sub_batch
             else:
-                raise AttributeError
+                raise AttributeError(f"Batch[{self.type_tree.type}] object has no attribute {key}")
         
     def __setattr__(self, key: str, val: Any):
         # for the sake of the subclasses
@@ -148,6 +162,9 @@ class Batch(BatchBase[T]):
         ret.batch_size =  self.batch_size
         ret.store = { key: recursive_map(lambda x: x.to(device) if hasattr(x, 'to') else x, val) for key, val in self.store.items() }
         return ret
+
+    def cuda(self):
+        return self.to('cuda')
 
 def make_batch(items):
     assert len(items) > 0
