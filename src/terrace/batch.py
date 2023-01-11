@@ -201,25 +201,3 @@ class DataLoader(torch.utils.data.DataLoader):
             dataset, batch_size, shuffle,
             collate_fn=collate, **kwargs
         )
-
-if __name__ == "__main__":
-
-    class Test(Batchable):
-        t1: torch.Tensor
-        t2: list
-
-    class Test2(Batchable):
-        item1: Test
-        item2: Test
-
-    class Test3(Batchable):
-        fred: Test2
-        george: Test
-
-    test = Test(torch.tensor([1,2,3]), t2=[1,2,3])
-    test2 = Test2(test, test)
-    test3 = Test3(test2, test)
-    batch = Batch([test, test])
-    batch3 = Batch([test3, test3, test3])
-    print(batch3.george.t1)
-    
