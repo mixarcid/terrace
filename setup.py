@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     
 setuptools.setup(
     name="terrace",
-    version="0.0.65",
+    version="0.0.67",
     author="Michael Brocidiacono",
     author_email="",
     description="high level PyTorch utils",
@@ -22,5 +22,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['torch>=1.6.0']
+    install_requires=['dataclassy']
 )
