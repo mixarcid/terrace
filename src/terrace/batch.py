@@ -1,183 +1,167 @@
-from typing import TypeVar, Generic, Type, Any, Dict, List, Union, Sequence, Optional, get_type_hints
-
-from copy import copy
+from typing import Any, Generic, Optional, Type, TypeVar, Union, List, Tuple
+from dataclassy import dataclass
 import torch
 import torch.utils.data
 from torch.utils.data.dataloader import default_collate
-from dataclasses import dataclass
-
-from .meta_utils import classclass, get_type_name, default_init, recursive_map
 from .categorical_tensor import CategoricalTensor
+from .meta_utils import recursive_map
 
+
+@dataclass
 class Batchable:
-
-    def __init__(self, *args, **kwargs):
-        """ default constructor that gets inherited """
-        # todo: add error messages
-        seen = set()
-        assert len(args) <= len(get_type_hints(self))
-        for name, arg in zip(get_type_hints(self).keys(), args):
-            setattr(self, name, arg)
-            seen.add(name)
-            
-        for key, val in kwargs.items():
-            assert key not in seen
-            assert key in get_type_hints(self)
-            setattr(self, key, val)
-            
+    """ Base class for all objects we want to batchify
+    
+    This method can also define static methods collate_{attribute}
+    and index_{attribute} """
+    
     @staticmethod
     def get_batch_type():
         """ override this method if you want a custom batch type
         for your batchable class """
-        raise NotImplementedError()
+        return Batch
 
-@dataclass
-class TypeTree:
-    type: Type
-    subtypes: Dict[str, "TypeTree"]
+    def asdict(self):
+        """ Override this method to define what attributes you want your
+        Batch to define """
+        return self.__dict__
 
-def make_type_tree(type_):
-    # todo: hmmm this doesn't make sense
-    if issubclass(type_, Batchable):
-        try:
-            type_.get_batch_type()
-            return TypeTree(type_, {})
-        except NotImplementedError:
-            pass
-    subtypes = { key: make_type_tree(val) for key, val in get_type_hints(type_).items() }
-    return TypeTree(type_, subtypes)
-            
 T = TypeVar('T')
 
 class BatchBase(Generic[T]):
-    pass
+
+    def item_type(self) -> Type[Batchable]:
+        """ Returns the type of each item in the batch """
+        raise NotImplementedError()
+
+    def cuda(self):
+        return self.to("cuda")
+
+    def cpu(self):
+        return self.to("cpu")
 
 class Batch(BatchBase[T]):
 
-    type_tree: TypeTree
-    batch_size: int
-    store: Dict[str, Any]
+    _internal_attribs = [ "_batch_len", "_batch_type" ]
+    _batch_len: int
+    _batch_type: Type[Batchable]
 
     def __init__(self,
-                 items: Optional[Union[List[T], Type]],
-                 **kwargs):
-        # items should only be None when we're making a blank batch
-        # and want to manually mess with things (e.g. in get and set attr)
-        if items is None: return
+                items: Optional[Union[List[T], Type[T]]],
+                **kwargs):
         if isinstance(items, type):
-            self.init_from_type(items, **kwargs)
+            self._init_from_type(items, **kwargs)
         else:
-            self.init_from_list(items)
+            self._init_from_list(items)
 
-    def init_from_list(self, items: List[T]):
+    def _init_from_list(self, items: List[T]):
+
         assert len(items) > 0
         template = items[0]
+        template_type = type(template)
 
-        self.type_tree = TypeTree(type(template), {})
-        self.batch_size = len(items)
-        self.store = {}
+        self._batch_len = len(items)
+        self._batch_type = template_type
 
-        if isinstance(template, Batch):
-            # recursion out the wazoo
-            raise NotImplementedError
-        else:
-            for key, val in template.__dict__.items():
-                self.type_tree.subtypes[key] = TypeTree(type(val), {})
-                attribs = [ getattr(item, key) for item in items ]
-                # subclasses can define custom collate methods
-                collate_method = "collate_" + key
-                if hasattr(type(template), collate_method):
-                    collated = getattr(type(template), collate_method)(attribs)
-                else:
-                    collated = collate(attribs)
-                if isinstance(collated, Batch):
-                    self.type_tree.subtypes[key] = collated.type_tree
-                    for key2, val2 in collated.store.items():
-                        full_key = key + "/" + key2
-                        self.store[full_key] = val2
-                else:
-                    self.store[key] = collated
-                
-    def init_from_type(self, batch_type: Type, **kwargs):
-        # self.type_tree = TypeTree(batch_type, get_type_hints(batch_type))
-        # self.type_tree = TypeTree(batch_type, {})
-        self.type_tree = make_type_tree(batch_type)
-        template_key = next(iter(self.type_tree.subtypes.keys()))
-        self.batch_size = len(kwargs[template_key])
-        self.store = {}
+        if isinstance(template, BatchBase):
+            raise ValueError("Batchifying batches is not supported at the moment")
 
-        for key in self.type_tree.subtypes.keys():
-            val = kwargs[key]
-            assert len(val) == self.batch_size
+        attribs = { key: [] for key in template.asdict().keys() }
+        for item in items:
+            for key, attrib in item.asdict().items():
+                attribs[key].append(attrib)
 
-            setattr(self, key, val)
-            
+        for key, attrib_list in attribs.items():
+
+            if key in Batch._internal_attribs:
+                raise ValueError(f"{key} is used internally by Batch, so it shouldn't be a member of {template_type}")
+
+            collate_method = "collate_" + key
+            if hasattr(type(template), collate_method):
+                collated = getattr(template_type, collate_method)(attrib_list)
+            else:
+                collated = collate(attrib_list)
+
+            self.__dict__[key] = collated
+        
+
+    def _init_from_type(self, batch_type: Type, **kwargs):
+        self._batch_type = batch_type
+        if len(kwargs) == 0:
+            raise ValueError("Can't determine batch size of empty batch")
+        self._batch_len = len(next(iter(kwargs.values())))
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
 
     def __len__(self) -> int:
-        return self.batch_size
+        return self._batch_len
 
-    def __getattr__(self, key: str) -> Any:
-        if key in [ 'type_tree', 'batch_size', 'store' ]:
-            raise AttributeError
-        if key in self.store:
-            return self.store[key]
-        else:
-            if key in self.type_tree.subtypes:
-                sub_batch = Batch(None)
-                sub_batch.type_tree = self.type_tree.subtypes[key]
-                sub_batch.batch_size = len(self)
-                sub_batch.store = {}
-                for key2, val in self.store.items():
-                    if key2.startswith(key):
-                        first, *rest = key2.split("/")
-                        new_key = "/".join(rest)
-                        sub_batch.store[new_key] = val
-                return sub_batch
-            else:
-                raise AttributeError(f"Batch[{self.type_tree.type}] object has no attribute {key}")
-        
-    def __setattr__(self, key: str, val: Any):
-        # for the sake of the subclasses
-        if type(self) != Batch:
-            return super().__setattr__(key, val)
-        if key in [ 'type_tree', 'batch_size', 'store' ]:
-            return super().__setattr__(key, val)
-        self.store[key] = val
+    def __getitem__(self, index) -> "BatchView[T]":
+        if isinstance(index, int) and index >= len(self):
+            raise IndexError()
+        return BatchView(self, index)
 
-    def __getitem__(self, index: int) -> T:
-        if index >= self.batch_size:
-            raise IndexError
-        ret = self.type_tree.type.__new__(self.type_tree.type)
-        for key in self.type_tree.subtypes:
-            item = getattr(self, key)[index]
-            item_type = self.type_tree.subtypes[key].type
-            # if not isinstance(item, item_type):
-            #    item = item_type(item)
-            setattr(ret, key, item)
-        return ret
+    def item_type(self) -> Type[T]:
+        """ Returns the type of each item in the batch """
+        return self._batch_type
+
+    def attribute_names(self) -> List[str]:
+        """ Returns the names of all the batched attributes """
+        return [ key for key in self.__dict__.keys() if key not in Batch._internal_attribs ]
+
+    def asdict(self):
+        """ Convert to dict """
+        return { key: val for key, val in self.__dict__.items() if key not in Batch._internal_attribs }
 
     def to(self, device):
-        ret = Batch(None)
-        ret.type_tree = self.type_tree
-        ret.batch_size =  self.batch_size
-        ret.store = { key: recursive_map(lambda x: x.to(device) if hasattr(x, 'to') else x, val) for key, val in self.store.items() }
-        return ret
+        to_dict = { key: recursive_map(lambda x: x.to(device) if hasattr(x, 'to') else x, val) for key, val in self.asdict().items() }
+        return Batch(self._batch_type, **to_dict)
 
-    def cuda(self):
-        return self.to('cuda')
+class BatchView(Generic[T], Batchable):
+    """ View of an item in a batch. Should act like said item in most
+    circumstances. We use views instead of creating actual items because,
+    for many use cases, lazily indexing batches is much faster """
 
-def make_batch(items):
-    assert len(items) > 0
-    first = items[0]
-    try:
-        return type(first).get_batch_type()(items)
-    except (NotImplementedError, AttributeError):
-        return Batch(items)
-            
+    _internal_attribs = [ "_batch", "_index" ]
+    _batch: Batch[T]
+    _index: Union[int, slice] # either int or slice
+
+    def __init__(self, batch: Batch, index: Union[int, slice]):
+        self._batch = batch
+        self._index = index
+
+    def __getattribute__(self, name: str) -> Any:
+        if name in BatchView._internal_attribs:
+            return object.__getattribute__(self, name)
+        if name in self._batch.__dict__:
+            attrib = getattr(self._batch, name)
+
+            item_type = self._batch.item_type()
+            index_method = "index_" + name
+            if hasattr(item_type, index_method):
+                return getattr(item_type, index_method)(attrib, self._index)
+
+            if isinstance(attrib, tuple):
+                return tuple([ item[self._index] for item in attrib ])
+            elif isinstance(attrib, dict):
+                return { key: val[self._index] for key, val in attrib.items() }
+            return attrib[self._index]
+        return object.__getattribute__(self, name)
+
+    def asdict(self):
+        return { key: getattr(self, key) for key in self._batch.attribute_names() }
+
 def collate(batch: Any) -> Any:
+    """ turn a list of items into a batch of items. Replacement
+    for pytorch's default collate. This is what we use in the
+    custom DataLoader class """
+    # performance optimization -- if we've already batched something, no
+    # need to do it again
+    if isinstance(batch, Batch):
+        return batch
+
     example = batch[0]
     if isinstance(example, Batchable):
-        return make_batch(batch)
+        return type(example).get_batch_type()(batch)
     elif isinstance(example, tuple) or isinstance(example, list):
         ret = []
         for i, item in enumerate(example):
@@ -185,7 +169,13 @@ def collate(batch: Any) -> Any:
             ret.append(collate(all_items))
         return type(example)(ret)
     elif isinstance(example, dict):
-        raise NotImplementedError()
+        ret = {}
+        for key in example.keys():
+            to_collate = []
+            for item in batch:
+                to_collate.append(item[key])
+            ret[key] = collate(to_collate)
+        return ret
     elif isinstance(example, CategoricalTensor):
         return torch.stack(batch)
     else:
@@ -195,6 +185,7 @@ def collate(batch: Any) -> Any:
             return batch
 
 class DataLoader(torch.utils.data.DataLoader):
+    """ Dataloader that correctly batchifies Batchable data """
     
     def __init__(self, dataset, batch_size=1, shuffle=False, **kwargs):
         super(DataLoader, self).__init__(

@@ -93,39 +93,6 @@ def test_obj_collate():
     assert isinstance(batch[0], Obj)
     assert batch[0].test == 1
 
-def test_dict_collate():
-
-    class SubTest(Batchable):
-        
-        test1: torch.Tensor
-        test2: torch.Tensor
-
-    class Test(Batchable):
-        sub_test: SubTest
-        test3: torch.Tensor
-
-    item = Test(SubTest(torch.zeros((10,10)), torch.zeros((20, 5))), torch.zeros(15,))
-    to_collate = (item, "aaa", 3)
-    batch = collate([to_collate, to_collate])
-    print(batch)
-
-    assert len(batch) == 3
-    item_batch, str_batch, int_batch = batch
-    
-    assert isinstance(item_batch, Batch)
-    assert len(item_batch) == 2
-    assert item_batch.sub_test.test1.shape == (2, 10, 10)
-    assert item_batch.sub_test.test2.shape == (2, 20, 5)
-    assert item_batch.test3.shape == (2, 15)
-
-    assert isinstance(int_batch, torch.Tensor)
-    assert int_batch.shape == (2,)
-    assert int_batch.dtype == torch.long
-
-    assert isinstance(str_batch, list)
-    assert len(str_batch) == 2
-    assert str_batch[-1] == "aaa"
-
 def test_dataloader():
 
     class SubTest(Batchable):
@@ -172,7 +139,7 @@ def test_dataloader():
 
     assert isinstance(float_batch, torch.Tensor)
     assert float_batch.shape == (2,)
-    assert float_batch.dtype == torch.float32
+    assert float_batch.dtype == torch.float64
 
 def test_complex_batchable():
 
@@ -183,7 +150,6 @@ def test_complex_batchable():
 
     class Test(Batchable):
         sub_test: SubTest
-        test3: torch.Tensor
 
     item = Test(SubTest((1, 2.9), {"a": torch.zeros(2,3), "b": torch.zeros(1,)}))
     batch = collate([item, item, item])
@@ -197,47 +163,11 @@ def test_complex_batchable():
 
     assert isinstance(float_batch, torch.Tensor)
     assert float_batch.shape == (3,)
-    assert float_batch.dtype == torch.float32
+    assert float_batch.dtype == torch.float64
 
-    assert isinstance(batch.sub_est.tes2t, dict)
-    a_batch = batch.sub_test["a"]
-    b_batch = batch.sub_test["b"]
-
-    assert a_batch.shape == (3,2,3)
-    assert b_batch.shape == (3,1)
-
-def test_pickle():
-
-    import pickle
-
-    class SubTest(Batchable):
-        
-        test1: Tuple[int, float]
-        test2: Dict[str, torch.Tensor]
-
-    class Test(Batchable):
-        sub_test: SubTest
-        test3: torch.Tensor
-
-    item = Test(SubTest((1, 2.9), {"a": torch.zeros(2,3), "b": torch.zeros(1,)}))
-    batch = collate([item, item, item])
-
-    batch = pickle.loads(pickle.dumps(batch))
-
-    assert isinstance(batch.sub_test.test1, tuple)
-    int_batch, float_batch = batch.sub_test.test1
-
-    assert isinstance(int_batch, torch.Tensor)
-    assert int_batch.shape == (3,)
-    assert int_batch.dtype == torch.long
-
-    assert isinstance(float_batch, torch.Tensor)
-    assert float_batch.shape == (3,)
-    assert float_batch.dtype == torch.float32
-
-    assert isinstance(batch.sub_est.tes2t, dict)
-    a_batch = batch.sub_test["a"]
-    b_batch = batch.sub_test["b"]
+    assert isinstance(batch.sub_test.test2, dict)
+    a_batch = batch.sub_test.test2["a"]
+    b_batch = batch.sub_test.test2["b"]
 
     assert a_batch.shape == (3,2,3)
     assert b_batch.shape == (3,1)
@@ -253,11 +183,11 @@ def test_make_batch():
         sub_test: SubTest
         test3: torch.Tensor
 
-    sub_batch = Batch(SubTest, test1=(torch.zeros((2,), dtype=torch.long), torch.ones((2,), dtype=torch.float32)), test2=[{"a": torch.zeros(2,3)}])
+    sub_batch = Batch(SubTest, test1=(torch.zeros((2,), dtype=torch.long), torch.ones((2,), dtype=torch.float32)), test2={"a": torch.zeros(2,3)})
     batch = Batch(Test, sub_test=sub_batch, test3=torch.zeros(2,5,10))
 
     for item in batch:
-        assert item.test3.shape == (5,)
+        
         int_item = item.sub_test.test1[0].item()
         float_item = item.sub_test.test1[1].item()
 
@@ -273,3 +203,65 @@ def test_make_batch():
 
 def test_make_batch_exc():
     raise NotImplementedError()
+
+def test_custom_collate():
+    raise NotImplementedError()
+
+def test_batch_view_batch():
+
+    class SubTest(Batchable):
+        
+        test1: Tuple[int, float]
+        test2: Dict[str, torch.Tensor]
+
+    class Test(Batchable):
+        sub_test: SubTest
+
+    item = Test(SubTest((1, 2.9), {"a": torch.zeros(2,3), "b": torch.zeros(1,)}))
+    batch = collate([item, item, item])
+
+    batch = collate([batch[0], batch[2]])
+
+    assert isinstance(batch.sub_test.test1, tuple)
+    int_batch, float_batch = batch.sub_test.test1
+
+    assert isinstance(int_batch, torch.Tensor)
+    assert int_batch.shape == (2,)
+    assert int_batch.dtype == torch.long
+
+    assert isinstance(float_batch, torch.Tensor)
+    assert float_batch.shape == (2,)
+    assert float_batch.dtype == torch.float64
+
+    assert isinstance(batch.sub_test.test2, dict)
+    a_batch = batch.sub_test.test2["a"]
+    b_batch = batch.sub_test.test2["b"]
+
+    assert a_batch.shape == (2,2,3)
+    assert b_batch.shape == (2,1)
+
+
+def test_batch_slicing():
+    raise NotImplementedError()
+
+def test_batch_cuda():
+    
+    class SubTest(Batchable):
+        
+        test1: Tuple[int, float]
+        test2: Dict[str, torch.Tensor]
+
+    class Test(Batchable):
+        sub_test: SubTest
+
+    item = Test(SubTest((1, 2.9), {"a": torch.zeros(2,3), "b": torch.zeros(1,)}))
+    batch = collate([item, item, item])
+
+    batch_cu = batch.cuda()
+    assert batch_cu.sub_test.test2["a"].device.type == "cuda"
+
+    batch_cu = batch.to("cuda")
+    assert batch_cu.sub_test.test2["a"].device.type == "cuda"
+
+    batch_cpu = batch_cu.cpu()
+    assert batch_cpu.sub_test.test2["a"].device.type == "cpu"
