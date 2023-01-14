@@ -66,3 +66,18 @@ class LazyEmbedding(Module):
             max_val = x.num_classes[idx]
             ret.append(self.make(nn.Embedding, max_val, embedding_dims[idx])(x.tensor[..., idx]))
         return torch.cat(ret, -1)
+
+class LazyMultiheadAttention(WrapperModule):
+
+    def forward(self, q, k, v):
+        self.start_forward()
+        embed_dim = q.shape[-1]
+        self.kwargs["kdim"] = k.shape[-1]
+        self.kwargs["vdim"] = v.shape[-1]
+        return self.make(nn.MultiheadAttention, embed_dim, *self.args, **self.kwargs)(q, k, v)
+
+class LazyLayerNorm(WrapperModule):
+
+    def forward(self, x):
+        self.start_forward()
+        return self.make(nn.LayerNorm, x.shape[1:], *self.args, **self.kwargs)(x)
