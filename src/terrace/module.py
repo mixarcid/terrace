@@ -11,12 +11,15 @@ class Module(nn.Module):
         self._started_forward = False
         self._submodule_index = 0
         self._submodules = nn.ModuleList()
+        self._param_index = 0
+        self._params = nn.ParameterList()
 
     def start_forward(self):
         # todo: these boolean values getting unweildly -- cut down!
         if self._submodule_index != 0:
             self._initialized = True
         self._submodule_index = 0
+        self._param_index = 0
         self._started_forward = True
 
     def make(self, cls, *args, **kwargs):
@@ -28,8 +31,18 @@ class Module(nn.Module):
         self._submodule_index += 1
         return submod
 
+    def make_param(self, cls, *args, **kwargs):
+        if not self._started_forward:
+            raise RuntimeError("You must call start_forward before you call make_param")
+        if not self._initialized:
+            self._params.append(cls(*args, **kwargs))
+        param = self._params[self._param_index]
+        self._param_index+= 1
+        return param
+
+
     def is_initialized(self):
-        return self._initialized or self._submodule_index > 0
+        return self._initialized or self._submodule_index > 0 or self._param_index > 0
 
     def parameters(self, recurse: bool = True):
         assert self.is_initialized(), "Terrace Module needs to be run on data before parameters method can be called"
