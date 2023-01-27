@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Any, Generic, Optional, Type, TypeVar, Union, List, Tuple
 from dataclassy import dataclass
 import torch
@@ -57,7 +58,10 @@ class Batch(BatchBase[T]):
 
         assert len(items) > 0
         template = items[0]
-        template_type = type(template)
+        template_type = template.__class__ # type(template)
+        # todo: very hacky
+        if template_type == BatchView:
+            template_type = template._batch._batch_type
 
         self._batch_len = len(items)
         self._batch_type = template_type
@@ -76,7 +80,7 @@ class Batch(BatchBase[T]):
                 raise ValueError(f"{key} is used internally by Batch, so it shouldn't be a member of {template_type}")
 
             collate_method = "collate_" + key
-            if hasattr(type(template), collate_method):
+            if hasattr(template_type, collate_method):
                 collated = getattr(template_type, collate_method)(attrib_list)
             else:
                 collated = collate(attrib_list)
@@ -121,13 +125,18 @@ class BatchView(Generic[T], Batchable):
     circumstances. We use views instead of creating actual items because,
     for many use cases, lazily indexing batches is much faster """
 
-    _internal_attribs = [ "_batch", "_index" ]
+    _internal_attribs = [ "_batch", "_index", "_get_methods" ]
     _batch: Batch[T]
     _index: Union[int, slice] # either int or slice
 
     def __init__(self, batch: Batch, index: Union[int, slice]):
         self._batch = batch
         self._index = index
+        # self.__class__ = self._batch._batch_type
+
+    # def _get_methods(self):
+    #     type_ = self._batch._batch_type
+    #     return {func: getattr(type_, func) for func in dir(type_) if callable(getattr(type_, func)) and not func.startswith("__")}
 
     def __getattribute__(self, name: str) -> Any:
         if name in BatchView._internal_attribs:
@@ -145,6 +154,9 @@ class BatchView(Generic[T], Batchable):
             elif isinstance(attrib, dict):
                 return { key: val[self._index] for key, val in attrib.items() }
             return attrib[self._index]
+        # methods = self._get_methods()
+        # if name in methods:
+        #     return partial(methods[name], self)
         return object.__getattribute__(self, name)
 
     def asdict(self):
