@@ -67,6 +67,10 @@ def cat_tensor_len(ct):
 def cuda(ct):
     return CategoricalTensor(ct.tensor.cuda(), num_classes=ct.num_classes)
 
+@implements(torch.Tensor.cpu)
+def cpu(ct):
+    return CategoricalTensor(ct.tensor.cpu(), num_classes=ct.num_classes)
+
 @implements(torch.Tensor.to)
 def to(ct, device):
     return CategoricalTensor(ct.tensor.to(device), num_classes=ct.num_classes)
