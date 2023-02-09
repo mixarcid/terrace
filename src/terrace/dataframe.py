@@ -1,4 +1,5 @@
-from src.terrace.batch import Batchable, _batch_repr
+from typing import Union
+from src.terrace.batch import Batch, Batchable, _batch_repr
 
 
 class DFRow(Batchable):
@@ -27,3 +28,13 @@ class DFRow(Batchable):
 
     def items(self):
         return self.__dict__.items()
+
+def merge(items: Union[DFRow, Batch]):
+    template = items[0]
+    attribs = {}
+    for item in items:
+        attribs.update(item.asdict())
+    if isinstance(template, Batch):
+        return Batch(DFRow, **attribs)
+    else:
+        return DFRow(**attribs)
