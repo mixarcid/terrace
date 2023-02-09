@@ -100,7 +100,7 @@ def test_graph_batch():
     two_batch[0].g1.dgl()
 
 def test_graph_batch_view_batch():
-        class SubNTest(Batchable):
+    class SubNTest(Batchable):
         t1: torch.Tensor
 
     class NTest(Batchable):

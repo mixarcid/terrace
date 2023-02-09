@@ -3,7 +3,7 @@ from dataclassy import dataclass
 import dgl
 import torch
 
-from .batch import Batchable, Batch, BatchBase, collate
+from .batch import BatchView, BatchViewBase, Batchable, Batch, BatchBase, collate
 
 @dataclass
 class TypeTree:
@@ -106,6 +106,9 @@ class GraphBase(Generic[N, E]):
             ret.__dict__[key] = val
         return ret
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(ndata={self.ndata}, edata={self.edata})"
+
 
 class Graph(GraphBase[N, E], Batchable):
     """ Wrapper around dgl graph allowing easier access to data """
@@ -199,15 +202,19 @@ class GraphBatch(BatchBase[G], GraphBase):
     def item_type(self):
         return self._graph_type
 
-class GraphBatchView(Generic[G]):
+class GraphBatchView(BatchViewBase[G]):
 
     _internal_attribs = [ "_batch", "_index" ]
     _batch: Batch[G]
     _index: Union[int, slice] # either int or slice
+    _node_type_tree: TypeTree
+    _edge_type_tree: TypeTree
 
     def __init__(self, batch: Batch, index: Union[int, slice]):
         self._batch = batch
         self._index = index
+        self._node_type_tree = batch._node_type_tree
+        self._edge_type_tree = batch._edge_type_tree
 
     @property
     def ndata(self) -> Batch[N]:
@@ -233,5 +240,14 @@ class GraphBatchView(Generic[G]):
 
     def dgl(self):
         return dgl.unbatch(self._batch.dgl())[self._index]
-    
+
+    def get_type(self):
+        return self._batch._graph_type
+
+    def __repr__(self):
+        return GraphBase.__repr__(self)
+        
+    @staticmethod
+    def get_batch_type():
+        return GraphBatch
         

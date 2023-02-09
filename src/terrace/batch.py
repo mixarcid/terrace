@@ -40,6 +40,13 @@ class BatchBase(Generic[T]):
     def cpu(self):
         return self.to("cpu")
 
+def _batch_repr(val):
+    if isinstance(val, torch.Tensor):
+        val_str = f"Tensor(shape={val.shape}, dtype={val.dtype})"
+    else:
+        val_str = repr(val)
+    return val_str
+
 class Batch(BatchBase[T]):
 
     _internal_attribs = [ "_batch_len", "_batch_type" ]
@@ -60,8 +67,8 @@ class Batch(BatchBase[T]):
         template = items[0]
         template_type = template.__class__ # type(template)
         # todo: very hacky
-        if template_type == BatchView:
-            template_type = template._batch._batch_type
+        if isinstance(template, BatchViewBase):
+            template_type = template.get_type()
 
         self._batch_len = len(items)
         self._batch_type = template_type
@@ -99,7 +106,9 @@ class Batch(BatchBase[T]):
     def __len__(self) -> int:
         return self._batch_len
 
-    def __getitem__(self, index) -> "BatchView[T]":
+    def __getitem__(self, index) -> Union["BatchView[T]", Any]:
+        if isinstance(index, str):
+            return self.__dict__[index]
         if isinstance(index, int) and index >= len(self):
             raise IndexError()
         return BatchView(self, index)
@@ -120,7 +129,17 @@ class Batch(BatchBase[T]):
         to_dict = { key: recursive_map(lambda x: x.to(device) if hasattr(x, 'to') else x, val) for key, val in self.asdict().items() }
         return Batch(self._batch_type, **to_dict)
 
-class BatchView(Generic[T], Batchable):
+    def __repr__(self):
+        args = []
+        for key, val in self.asdict().items():
+            val_str = _batch_repr(val)
+            args.append(f"{key}={val_str}")
+        return f"Batch[{self._batch_type.__name__}]({', '.join(args)})"
+
+class BatchViewBase(Generic[T], Batchable):
+    pass
+
+class BatchView(BatchViewBase[T]):
     """ View of an item in a batch. Should act like said item in most
     circumstances. We use views instead of creating actual items because,
     for many use cases, lazily indexing batches is much faster """
@@ -141,7 +160,7 @@ class BatchView(Generic[T], Batchable):
     def __getattribute__(self, name: str) -> Any:
         if name in BatchView._internal_attribs:
             return object.__getattribute__(self, name)
-        if name in self._batch.__dict__:
+        if name in self._batch.__dict__ and not name in Batch._internal_attribs:
             attrib = getattr(self._batch, name)
 
             item_type = self._batch.item_type()
@@ -161,6 +180,16 @@ class BatchView(Generic[T], Batchable):
 
     def asdict(self):
         return { key: getattr(self, key) for key in self._batch.attribute_names() }
+
+    def __repr__(self):
+        args = []
+        for key, val in self.asdict().items():
+            val_str = _batch_repr(val)
+            args.append(f"{key}={val_str}")
+        return f"BatchView[{self.get_type().__name__}]({', '.join(args)})"
+
+    def get_type(self):
+        return self._batch._batch_type
 
 def collate(batch: Any) -> Any:
     """ turn a list of items into a batch of items. Replacement
