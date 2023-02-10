@@ -49,7 +49,7 @@ def _batch_repr(val):
 
 class Batch(BatchBase[T]):
 
-    _internal_attribs = [ "_batch_len", "_batch_type" ]
+    _internal_attribs = [ "_batch_len", "_batch_type", "__dict__" ]
     _batch_len: int
     _batch_type: Type[Batchable]
 
@@ -136,6 +136,16 @@ class Batch(BatchBase[T]):
             args.append(f"{key}={val_str}")
         return f"Batch[{self._batch_type.__name__}]({', '.join(args)})"
 
+    def __getattribute__(self, name: str) -> Any:
+        if name in Batch._internal_attribs or name in self.__dict__:
+            return object.__getattribute__(self, name)
+        batch_method_name = "batch_" + name
+        if hasattr(self, "_batch_type") and hasattr(self._batch_type, batch_method_name):
+            batch_method = getattr(self._batch_type, batch_method_name)
+            if callable(batch_method):
+                return partial(batch_method, self)
+        return object.__getattribute__(self, name)
+
 class BatchViewBase(Generic[T], Batchable):
     pass
 
@@ -191,6 +201,11 @@ class BatchView(BatchViewBase[T]):
     def get_type(self):
         return self._batch._batch_type
 
+class NoStackTensor(torch.Tensor):
+    """ This is used when you want to collate tensors into a list instead
+    of stack them. E.g. when you have different shapes"""
+    pass
+
 def collate(batch: Any) -> Any:
     """ turn a list of items into a batch of items. Replacement
     for pytorch's default collate. This is what we use in the
@@ -219,6 +234,8 @@ def collate(batch: Any) -> Any:
         return ret
     elif isinstance(example, CategoricalTensor):
         return torch.stack(batch)
+    elif isinstance(example, NoStackTensor):
+        return batch
     else:
         try:
             return default_collate(batch)

@@ -1,5 +1,5 @@
 from typing import Union
-from src.terrace.batch import Batch, Batchable, _batch_repr
+from .batch import Batch, Batchable, _batch_repr
 
 
 class DFRow(Batchable):

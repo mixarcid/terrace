@@ -265,3 +265,15 @@ def test_batch_cuda():
 
     batch_cpu = batch_cu.cpu()
     assert batch_cpu.sub_test.test2["a"].device.type == "cpu"
+
+def test_custom_batch_method(self):
+    class Test(Batchable):
+
+        def batch_test(self):
+            return self.t1
+
+        t1: torch.Tensor
+
+    test = Test(t1=torch.randn(1,3))
+    batch = collate([test, test, test])
+    assert torch.all(batch.test() == batch.t1)
