@@ -111,7 +111,9 @@ class Batch(BatchBase[T]):
             return self.__dict__[index]
         if isinstance(index, int) and index >= len(self):
             raise IndexError()
-        return BatchView(self, index)
+        if isinstance(index, int):
+            return BatchView(self, index)
+        return collate([self[i] for i in range(len(self))[index]])
 
     def item_type(self) -> Type[T]:
         """ Returns the type of each item in the batch """
@@ -149,6 +151,9 @@ class Batch(BatchBase[T]):
 class BatchViewBase(Generic[T], Batchable):
     pass
 
+def _get_methods_for_type(type_):
+    return {func: getattr(type_, func) for func in dir(type_) if callable(getattr(type_, func)) and not func.startswith("__")}
+
 class BatchView(BatchViewBase[T]):
     """ View of an item in a batch. Should act like said item in most
     circumstances. We use views instead of creating actual items because,
@@ -163,12 +168,14 @@ class BatchView(BatchViewBase[T]):
         self._index = index
         # self.__class__ = self._batch._batch_type
 
-    # def _get_methods(self):
-    #     type_ = self._batch._batch_type
-    #     return {func: getattr(type_, func) for func in dir(type_) if callable(getattr(type_, func)) and not func.startswith("__")}
+    def _get_methods(self):
+        type_ = self._batch._batch_type
+        return { key: val for key, val in _get_methods_for_type(type_).items() if key not in _get_methods_for_type(BatchView) }
 
     def __getattribute__(self, name: str) -> Any:
-        if name in BatchView._internal_attribs:
+        if name == "__dict__" or name in BatchView._internal_attribs or name in _get_methods_for_type(BatchView):
+            return object.__getattribute__(self, name)
+        if name in self.__dict__:
             return object.__getattribute__(self, name)
         if name in self._batch.__dict__ and not name in Batch._internal_attribs:
             attrib = getattr(self._batch, name)
@@ -176,17 +183,49 @@ class BatchView(BatchViewBase[T]):
             item_type = self._batch.item_type()
             index_method = "index_" + name
             if hasattr(item_type, index_method):
-                return getattr(item_type, index_method)(attrib, self._index)
+                ret = getattr(item_type, index_method)(attrib, self._index)
+                self.__dict__[name] = ret
+                return ret
 
             if isinstance(attrib, tuple):
-                return tuple([ item[self._index] for item in attrib ])
+                ret = tuple([ item[self._index] for item in attrib ])
+                self.__dict__[name] = ret
+                return ret
             elif isinstance(attrib, dict):
-                return { key: val[self._index] for key, val in attrib.items() }
-            return attrib[self._index]
-        # methods = self._get_methods()
-        # if name in methods:
-        #     return partial(methods[name], self)
+                ret = { key: val[self._index] for key, val in attrib.items() }
+                self.__dict__[name] = ret
+                return ret
+
+            ret = attrib[self._index]
+            self.__dict__[name] = ret
+            return ret
+
+        if isinstance(self._index, int):
+            # assume we are acting like a T
+            methods = self._get_methods()
+            if name in methods:
+                return partial(methods[name], self)
+        else:
+            # assume we are acting like a Batch[T]
+            # todo: make this whole "what am I " process more robust
+            batch_method_name = "batch_" + name
+            if hasattr(self, "_batch") and hasattr(self.get_type(), batch_method_name):
+                batch_method = getattr(self.get_type(), batch_method_name)
+                if callable(batch_method):
+                    return partial(batch_method, self)
+            pass
         return object.__getattribute__(self, name)
+
+    def __getitem__(self, index):
+        if isinstance(self._index, int):
+            raise ValueError("Can only index into a BatchView if the batchview is view of a slice of a batch")
+        new_idx = range(len(self._batch))[index]
+        if isinstance(new_idx, range):
+            new_idx = slice(new_idx.start, new_idx.stop, new_idx.step)
+            raise NotImplementedError # need to test this
+        else:
+            assert isinstance(new_idx, int)
+        return BatchView(self._batch, new_idx)
 
     def asdict(self):
         return { key: getattr(self, key) for key in self._batch.attribute_names() }
