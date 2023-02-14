@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Tuple, Union
 import functools
 import torch
@@ -45,6 +46,10 @@ class CategoricalTensor(torch.Tensor):
         # return func(*args, **kwargs)
         raise NotImplementedError(func)
 
+class NoStackCatTensor(CategoricalTensor):
+    pass
+
+
 def implements(torch_function):
     """Register a torch function override for ScalarTensor"""
     @functools.wraps(torch_function)
@@ -52,6 +57,10 @@ def implements(torch_function):
         HANDLED_FUNCTIONS[torch_function] = func
         return func
     return decorator
+
+@implements(torch.Tensor.__deepcopy__)
+def ct_deepcopy(ct, memo):
+    return CategoricalTensor(deepcopy(ct.tensor, memo), deepcopy(ct.num_classes, memo))
 
 @implements(torch.split)
 def split(ct, *args, **kwargs):

@@ -1,10 +1,11 @@
 from functools import partial
+from torch.utils._pytree import tree_map
 from typing import Any, Generic, Optional, Type, TypeVar, Union, List, Tuple
 from dataclassy import dataclass
 import torch
 import torch.utils.data
 from torch.utils.data.dataloader import default_collate
-from .categorical_tensor import CategoricalTensor
+from .categorical_tensor import CategoricalTensor, NoStackCatTensor
 from .meta_utils import recursive_map
 
 
@@ -243,7 +244,25 @@ class BatchView(BatchViewBase[T]):
 class NoStackTensor(torch.Tensor):
     """ This is used when you want to collate tensors into a list instead
     of stack them. E.g. when you have different shapes"""
-    pass
+
+    @staticmethod
+    def __new__(cls, tensor: torch.Tensor):
+        return torch.Tensor._make_subclass(cls, tensor.to('meta'))
+
+    def __init__(self, tensor):
+        self.tensor = tensor
+
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs={}):
+        # return torch.Tensor.__torch_dispatch__(func, types, args, kwargs)
+        def unwrap(x):
+            return x.tensor if isinstance(x, NoStackTensor) else x
+        def wrap(x):
+            return NoStackTensor(x) if isinstance(x, torch.Tensor) else x
+        args = tree_map(unwrap, args)
+        kwargs = tree_map(unwrap, kwargs)
+        out = func(*args, **kwargs)
+        return tree_map(wrap, out)
 
 def collate(batch: Any) -> Any:
     """ turn a list of items into a batch of items. Replacement
@@ -271,10 +290,10 @@ def collate(batch: Any) -> Any:
                 to_collate.append(item[key])
             ret[key] = collate(to_collate)
         return ret
+    elif isinstance(example, NoStackTensor) or isinstance(example, NoStackCatTensor):
+        return batch
     elif isinstance(example, CategoricalTensor):
         return torch.stack(batch)
-    elif isinstance(example, NoStackTensor):
-        return batch
     else:
         try:
             return default_collate(batch)
