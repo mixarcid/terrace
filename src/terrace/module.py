@@ -13,6 +13,8 @@ class Module(nn.Module):
         self._submodules = nn.ModuleList()
         self._param_index = 0
         self._params = nn.ParameterList()
+        self._checkpoints = []
+        self._checkpoint_index = 0
 
     def start_forward(self):
         # todo: these boolean values getting unweildly -- cut down!
@@ -21,6 +23,7 @@ class Module(nn.Module):
         self._submodule_index = 0
         self._param_index = 0
         self._started_forward = True
+        self._checkpoint_index = 0
 
     def make(self, cls, *args, **kwargs):
         if not self._started_forward:
@@ -40,6 +43,12 @@ class Module(nn.Module):
         self._param_index+= 1
         return param
 
+    def checkpoint(self):
+        if self._initialized:
+            self._submodule_index, self._param_index = self._checkpoints[self._checkpoint_index]
+            self._checkpoint_index += 1
+        else:
+            self._checkpoints.append((self._submodule_index, self._param_index))
 
     def is_initialized(self):
         return self._initialized or self._submodule_index > 0 or self._param_index > 0
