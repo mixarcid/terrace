@@ -50,6 +50,12 @@ class Module(nn.Module):
         else:
             self._checkpoints.append((self._submodule_index, self._param_index))
 
+    def loop_start(self):
+        raise NotImplementedError
+
+    def loop_body(self):
+        raise NotImplementedError
+
     def is_initialized(self):
         return self._initialized or self._submodule_index > 0 or self._param_index > 0
 

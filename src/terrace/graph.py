@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Dict, List, Sequence, Set, Tuple, Optional, Type, TypeVar, Generic, Any, Union
 from dataclassy import dataclass
 import dgl
@@ -85,6 +86,8 @@ class GraphBase(Generic[N, E]):
 
     @property
     def edata(self) -> Batch[E]:
+        if self._edge_type_tree is None:
+            return None
         return unflatten_batch(self._dgl_graph.edata, self._edge_type_tree)
 
     @property
@@ -164,6 +167,7 @@ class Graph(GraphBase[N, E], Batchable):
 G = TypeVar('G', bound=Graph)
 class GraphBatch(BatchBase[G], GraphBase):
 
+    _internal_attribs = [ "_graph_type", "node_slices", "edge_slices", "__dict__" ]
     _graph_type: Type[Graph]
     node_slices: List[slice]
     edge_slices: List[slice]
@@ -201,6 +205,16 @@ class GraphBatch(BatchBase[G], GraphBase):
 
     def item_type(self):
         return self._graph_type
+
+    def __getattribute__(self, name: str) -> Any:
+        if name in GraphBatch._internal_attribs or name in self.__dict__:
+            return object.__getattribute__(self, name)
+        batch_method_name = "batch_" + name
+        if hasattr(self, "_graph_type") and hasattr(self._graph_type, batch_method_name):
+            batch_method = getattr(self._graph_type, batch_method_name)
+            if callable(batch_method):
+                return partial(batch_method, self)
+        return object.__getattribute__(self, name)
 
 class GraphBatchView(BatchViewBase[G]):
 
