@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     
 setuptools.setup(
     name="terrace",
-    version="0.0.74",
+    version="0.0.75",
     author="Michael Brocidiacono",
     author_email="",
     description="high level PyTorch utils",
