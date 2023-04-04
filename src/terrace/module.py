@@ -11,6 +11,7 @@ class Module(nn.Module):
         self._started_forward = False
         self._submodule_index = 0
         self._submodules = nn.ModuleList()
+        self._submodule_list = []
         self._param_index = 0
         self._params = nn.ParameterList()
         self._checkpoints = []
@@ -18,20 +19,22 @@ class Module(nn.Module):
 
     def start_forward(self):
         # todo: these boolean values getting unweildly -- cut down!
-        if self._submodule_index != 0:
-            self._initialized = True
-        self._submodule_index = 0
-        self._param_index = 0
-        self._started_forward = True
-        self._checkpoint_index = 0
+        if self.__dict__["_submodule_index"] != 0:
+            self.__dict__["_initialized"] = True
+        self.__dict__["_submodule_index"] = 0
+        self.__dict__["_param_index"] = 0
+        self.__dict__["_started_forward"] = True
+        self.__dict__["_checkpoint_index"] = 0
 
     def make(self, cls, *args, **kwargs):
-        if not self._started_forward:
+        if not self.__dict__["_started_forward"]:
             raise RuntimeError("You must call start_forward before you call make")
-        if not self._initialized:
-            self._submodules.append(cls(*args, **kwargs))
-        submod = self._submodules[self._submodule_index]
-        self._submodule_index += 1
+        if not self.__dict__["_initialized"]:
+            submod = cls(*args, **kwargs)
+            self._submodules.append(submod)
+            self._submodule_list.append(submod)
+        submod = self.__dict__["_submodule_list"][self.__dict__["_submodule_index"]]
+        self.__dict__["_submodule_index"] += 1
         return submod
 
     def make_param(self, cls, *args, **kwargs):

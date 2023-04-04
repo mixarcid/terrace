@@ -241,6 +241,34 @@ class BatchView(BatchViewBase[T]):
     def get_type(self):
         return self._batch._batch_type
 
+class LazyBatch(BatchBase[T]):
+
+    _items: List[T]
+    _batch_type: Type[Batchable]
+    _internal_attribs = [ "_items", "_batch_type" ]
+
+    def __init__(self, items):
+        self._items = items
+        self._batch_type = type(items[0])
+
+    def __getitem__(self, index):
+        return self._items[index]
+
+    def __getattribute__(self, name):
+        if name == "__dict__" or name in LazyBatch._internal_attribs or name in self.__dict__:
+            return object.__getattribute__(self, name)
+        batch_method_name = "batch_" + name
+        if hasattr(self, "_batch_type") and hasattr(self._batch_type, batch_method_name):
+            batch_method = getattr(self._batch_type, batch_method_name)
+            if callable(batch_method):
+                return partial(batch_method, self)
+        if name in self[0].__dict__:
+            return collate([getattr(item, name) for item in self._items], lazy=True)
+        return object.__getattribute__(self, name)
+
+    def __repr__(self):
+        return "LazyBatch"
+
 class NoStackTensor(torch.Tensor):
     """ This is used when you want to collate tensors into a list instead
     of stack them. E.g. when you have different shapes"""
@@ -264,7 +292,7 @@ class NoStackTensor(torch.Tensor):
         out = func(*args, **kwargs)
         return tree_map(wrap, out)
 
-def collate(batch: Any) -> Any:
+def collate(batch: Any, lazy=False) -> Any:
     """ turn a list of items into a batch of items. Replacement
     for pytorch's default collate. This is what we use in the
     custom DataLoader class """
@@ -275,12 +303,15 @@ def collate(batch: Any) -> Any:
 
     example = batch[0]
     if isinstance(example, Batchable):
-        return type(example).get_batch_type()(batch)
+        batch_type = type(example).get_batch_type()
+        if lazy and batch_type == Batch:
+            return LazyBatch(batch)
+        return batch_type(batch)
     elif isinstance(example, tuple) or isinstance(example, list):
         ret = []
         for i, item in enumerate(example):
             all_items = [ b[i] for b in batch]
-            ret.append(collate(all_items))
+            ret.append(collate(all_items, lazy))
         return type(example)(ret)
     elif isinstance(example, dict):
         ret = {}
@@ -288,7 +319,7 @@ def collate(batch: Any) -> Any:
             to_collate = []
             for item in batch:
                 to_collate.append(item[key])
-            ret[key] = collate(to_collate)
+            ret[key] = collate(to_collate, lazy)
         return ret
     elif isinstance(example, NoStackTensor) or isinstance(example, NoStackCatTensor):
         return batch

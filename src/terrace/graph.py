@@ -237,6 +237,8 @@ class GraphBatchView(BatchViewBase[G]):
 
     @property
     def edata(self) -> Batch[E]:
+        if self._batch.edata is None:
+            return None
         idxs = self._batch.edge_slices[self._index]
         return self._batch.edata[idxs]
 
