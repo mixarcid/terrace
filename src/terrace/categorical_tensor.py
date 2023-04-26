@@ -44,6 +44,7 @@ class CategoricalTensor(torch.Tensor):
         if func in HANDLED_FUNCTIONS:
             return HANDLED_FUNCTIONS[func](*args, **kwargs)
         # return func(*args, **kwargs)
+        print(func)
         raise NotImplementedError(func)
 
 class NoStackCatTensor(CategoricalTensor):
@@ -71,6 +72,26 @@ def split(ct, *args, **kwargs):
 @implements(torch.Tensor.__len__)
 def cat_tensor_len(ct):
     return len(ct.tensor)
+
+@implements(torch.Tensor.is_sparse.__get__)
+def cat_is_sparse(ct):
+    return ct.tensor.is_sparse
+
+@implements(torch.Tensor.storage)
+def cat_storage(ct):
+    return ct.tensor.storage()
+
+@implements(torch.Tensor.element_size)
+def cat_element_size(ct):
+    return ct.tensor.element_size()
+
+@implements(torch.Tensor.size)
+def cat_size(ct, *args, **kwargs):
+    return ct.tensor.size(*args, **kwargs)
+    
+@implements(torch.Tensor.numel)
+def cat_numel(ct):
+    return ct.tensor.numel()
 
 @implements(torch.Tensor.cuda)
 def cuda(ct):

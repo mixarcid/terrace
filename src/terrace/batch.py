@@ -251,6 +251,9 @@ class LazyBatch(BatchBase[T]):
         self._items = items
         self._batch_type = type(items[0])
 
+    def __len__(self):
+        return len(self._items)
+
     def __getitem__(self, index):
         return self._items[index]
 
@@ -262,7 +265,7 @@ class LazyBatch(BatchBase[T]):
             batch_method = getattr(self._batch_type, batch_method_name)
             if callable(batch_method):
                 return partial(batch_method, self)
-        if name in self[0].__dict__:
+        if hasattr(self[0], name):
             return collate([getattr(item, name) for item in self._items], lazy=True)
         return object.__getattribute__(self, name)
 
