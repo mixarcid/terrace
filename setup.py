@@ -5,18 +5,22 @@ with open("README.md", "r") as fh:
     
 setuptools.setup(
     name="terrace",
-    version="0.0.1",
+    version="0.0.77",
     author="Michael Brocidiacono",
     author_email="",
     description="high level PyTorch utils",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/mixarcid/terrace",
-    packages=setuptools.find_packages(),
+    packages=setuptools.find_packages(
+        where='src',
+        include=['*'],
+    ),
+    package_dir={"": "src"},
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['torch>=1.6.0']
+    install_requires=['dataclassy']
 )

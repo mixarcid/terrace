@@ -7,3 +7,5 @@
 build
 dist
 *.egg-info
+notebooks
+docs/_build/
