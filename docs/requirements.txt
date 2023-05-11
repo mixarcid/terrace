@@ -3,6 +3,9 @@ dataclassy
 --find-links https://download.pytorch.org/whl/cpu
 torch==2.0.0
 
+--find-links https://data.dgl.ai/wheels/repo.html
+dgl
+
 sphinx
 sphinx_rtd_theme
 jupyter-sphinx
