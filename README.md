@@ -8,7 +8,7 @@ Terrace provides two major features: Modules and Batches. Terrace Modules allow 
 
 ## Modules
 
-If you're writing a PyTorch model, you need to populate both the `__init__` and `forward` methods of your model. `__init__` specifies all the submodules of your model, including all the input and output tensor shapes. `forward` specifies how to use all these submodules in order to run your computation. A simple neural network with a single hidden layer might look something like this:
+If you're writing a vanilla PyTorch model, you need to populate both the `__init__` and `forward` methods of your model. `__init__` specifies all the submodules of your model, including all the input and output tensor shapes. `forward` specifies how to use all these submodules in order to run your computation. A simple neural network with a single hidden layer might look something like this:
 
 
 ```python
@@ -50,8 +50,7 @@ class BetterSimpleNetwork(ter.Module):
 
     def forward(self, x):
         self.start_forward()
-        # with the LazyLinear layers, we only need to specify
-        # the output dimension
+        # with the LazyLinear layers, we only need to specify the output dimension
         hid = F.relu(self.make(ter.LazyLinear, 64)(x))
         out = self.make(ter.LazyLinear, 1)(hid)
         return out
@@ -67,7 +66,7 @@ print(out.shape)
 
 The first time this model is run, the `make` calls with create new linear layers, each of which lazily creates their weight matrices based on their inputs. Writing complex models is now easier, faster, and just more fun.
 
-There are some important caveats to this approach, so please make sure to check out the [documentation](https://terrace.readthedocs.io).
+There are some important caveats to this approach, so please make sure to check out the [documentation](https://terrace.readthedocs.io/en/latest/guides/module.html).
 
 ## Batches
 
@@ -136,6 +135,8 @@ for batch in loader:
 
 Terrace also has a higher-level interface for graph data, and several more features. Check out the [documentation](https://terrace.readthedocs.io)  for more info!
 
+## Getting started
+
 If you're interested in using Terrace for your own work, simply install via pip.
 
 ```bash
@@ -144,5 +145,5 @@ pip install terrace
 
 If you find Terrace useful, or find a bug, or have an idea for further functionality, please reach out! [Email me](mailto:mixarcidiacono@gmail.com) or find me on [Twitter](https://twitter.com/mixarcid). 
 
-### Disclaimer
+## Disclaimer
 At the moment, Terrace is very much a work in progress. The API is subject to change and there are likely many bugs. In its current state, I would not recommend this package for production use.

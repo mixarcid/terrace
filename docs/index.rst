@@ -15,6 +15,12 @@ are two main features Terrace introduces:
 * :ref:`Batches` enable making nice object-oriented code compatible with PyTorch
   dataloaders. No more passing 10 tensors as arguments to your functions!
 
+To get started with Terrace, simply install via pip.
+
+.. code-block:: bash
+
+      pip install terrace
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

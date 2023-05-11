@@ -46,12 +46,12 @@ multiple people into a single ``Batch[Person]``.
     print(batch)
 
     # Batches have a length and can be indexed, just like lists
-    print(len(batch))
+    print("Batch length:", len(batch))
     
     # But you can also access their (batched) members, just like
     # objects of the original class
-    print(dave.name.shape)
-    print(batch.name.shape) # notice the extra batch dimension
+    print("Person name shape:", dave.name.shape)
+    print("Batch[Person] name shape:", batch.name.shape) # notice the extra batch dimension
     
     print(batch[0]) # un-batchification
 
