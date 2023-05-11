@@ -160,7 +160,6 @@ def _getitem(t: CategoricalTensor, idx: int):
             num_classes = t.num_classes[idx]
     if isinstance(num_classes, int):
         num_classes = (num_classes,)
-    print(t.tensor[idx].shape, num_classes)
     return CategoricalTensor(t.tensor[idx], num_classes)
 
 @_implements(torch.Tensor.shape.__get__)
