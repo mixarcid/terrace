@@ -1,6 +1,6 @@
 # Terrace
 
-(Documentation)[https://terrace.readthedocs.io] | (Code)[https://github.com/mixarcid/terrace] | (PyPI)[https://pypi.org/project/terrace/]
+[Documentation](https://terrace.readthedocs.io) | [Code](https://github.com/mixarcid/terrace) | [PyPI](https://pypi.org/project/terrace/)
 
 Welcome to Terrace, a collection of high-level utilities for writing concise and maintainable PyTorch code. I've been using PyTorch in my own work for a while now, and I developed these tools to boost my productivity. I'm now ready to share them with the world -- I hope you find Terrace to be as helpful as I have.
 
@@ -67,7 +67,7 @@ print(out.shape)
 
 The first time this model is run, the `make` calls with create new linear layers, each of which lazily creates their weight matrices based on their inputs. Writing complex models is now easier, faster, and just more fun.
 
-There are some important caveats to this approach, so please make sure to check out the (documentation)[https://terrace.readthedocs.io].
+There are some important caveats to this approach, so please make sure to check out the [documentation](https://terrace.readthedocs.io).
 
 ## Batches
 
@@ -134,7 +134,7 @@ for batch in loader:
     )
 
 
-Terrace also has a higher-level interface for graph data, and several more features. Check out the (documentation)[https://terrace.readthedocs.io]  for more info!
+Terrace also has a higher-level interface for graph data, and several more features. Check out the [documentation](https://terrace.readthedocs.io)  for more info!
 
 If you're interested in using Terrace for your own work, simply install via pip.
 
