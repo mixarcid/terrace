@@ -110,8 +110,12 @@ class GraphBase(Generic[N, E]):
         return ret
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(ndata={self.ndata}, edata={self.edata})"
-
+        indent = "   "
+        ret = f"{self.__class__.__name__}(\n"
+        ret += indent + "ndata=" + repr(self.ndata).replace("\n", "\n" + indent) + "\n"
+        ret += indent + "edata=" + repr(self.edata).replace("\n", "\n" + indent) + "\n"
+        ret += ")"
+        return ret
 
 class Graph(GraphBase[N, E], Batchable):
     """ Wrapper around dgl graph allowing easier access to data """

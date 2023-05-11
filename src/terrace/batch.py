@@ -133,11 +133,13 @@ class Batch(BatchBase[T]):
         return Batch(self._batch_type, **to_dict)
 
     def __repr__(self):
-        args = []
+        indent = "   "
+        ret = f"Batch[{self._batch_type.__name__}](\n"
         for key, val in self.asdict().items():
-            val_str = _batch_repr(val)
-            args.append(f"{key}={val_str}")
-        return f"Batch[{self._batch_type.__name__}]({', '.join(args)})"
+            val_str = _batch_repr(val).replace("\n", "\n" + indent)
+            ret += indent +  f"{key}={val_str}\n"
+        ret += ")"
+        return ret
 
     def __getattribute__(self, name: str) -> Any:
         if name in Batch._internal_attribs or name in self.__dict__:
@@ -232,16 +234,29 @@ class BatchView(BatchViewBase[T]):
         return { key: getattr(self, key) for key in self._batch.attribute_names() }
 
     def __repr__(self):
-        args = []
+        # Todo: this is basically copied from batch __repr__. Make both
+        # call a generalized function
+        # args = []
+        # for key, val in self.asdict().items():
+        #     val_str = _batch_repr(val)
+        #     args.append(f"{key}={val_str}")
+        # return f"BatchView[{self.get_type().__name__}]({', '.join(args)})"
+        indent = "   "
+        ret = f"BatchView[{self.get_type().__name__}](\n"
         for key, val in self.asdict().items():
-            val_str = _batch_repr(val)
-            args.append(f"{key}={val_str}")
-        return f"BatchView[{self.get_type().__name__}]({', '.join(args)})"
+            val_str = _batch_repr(val).replace("\n", "\n" + indent)
+            ret += indent +  f"{key}={val_str}\n"
+        ret += ")"
+        return ret
 
     def get_type(self):
         return self._batch._batch_type
 
 class LazyBatch(BatchBase[T]):
+    """ This is mainly used if you're recollating after indexing a batch 
+    ( eg collate([batch[0]])). If you use collate([batch[0]], lazy=True)
+    (recommended), it will return a LazyBatch. This is nice because it will
+    only re-collate the attributes of the batch on the fly """
 
     _items: List[T]
     _batch_type: Type[Batchable]
@@ -258,7 +273,7 @@ class LazyBatch(BatchBase[T]):
         return self._items[index]
 
     def __getattribute__(self, name):
-        if name == "__dict__" or name in LazyBatch._internal_attribs or name in self.__dict__:
+        if name.startswith("_"):
             return object.__getattribute__(self, name)
         batch_method_name = "batch_" + name
         if hasattr(self, "_batch_type") and hasattr(self._batch_type, batch_method_name):
@@ -271,6 +286,9 @@ class LazyBatch(BatchBase[T]):
 
     def __repr__(self):
         return "LazyBatch"
+    
+    def to(self, device):
+        raise NotImplementedError
 
 class NoStackTensor(torch.Tensor):
     """ This is used when you want to collate tensors into a list instead

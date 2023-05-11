@@ -1,3 +1,4 @@
+from typing import Tuple, Union
 import torch
 import torch.nn as nn
 
@@ -84,8 +85,22 @@ class LazyLinear(WrapperModule):
 
 
 class LazyEmbedding(Module):
+    """ LazyEmbedding uses the num_classes from CategoricalTensors 
+    to determine embedding weight size. Note that it assumes tensors
+    have shape (..., N) where N is the number of categorical features.
+    So, in most cases where you have a batch of single categorical features,
+    you must give the embedding a tensor of shape (B, 1). Admittedly
+    this is a bit weird, but it does nicely extend to cases where you have
+    multiple categorical features. In this case, the embedding creates
+    an ``nn.Embedding`` layer for each feature and concatenates the result
+    together. Thus the output of this layer has shape (B, E*N), where
+    E is the ``embedding_dim``. """
 
-    def __init__(self, embedding_dims):
+    def __init__(self, embedding_dims: Union[Tuple[int], int]):
+        """ If ``embedding_dims`` is a tuple, it specifies the per-feature
+        embedding dimension (must have the same length as the ``num_classes``
+        of the input tensor). If it's an int, we use the same dimension for
+        the embedding of all the features. """
         super().__init__()
         self.embedding_dims = embedding_dims
 
