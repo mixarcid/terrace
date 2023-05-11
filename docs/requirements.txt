@@ -1,0 +1,8 @@
+dataclassy
+
+--find-links https://download.pytorch.org/whl/cpu
+torch==2.0.0
+
+sphinx
+sphinx_rtd_theme
+jupyter-sphinx
