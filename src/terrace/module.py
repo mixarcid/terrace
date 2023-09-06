@@ -34,6 +34,9 @@ class Module(nn.Module):
             submod = cls(*args, **kwargs)
             self._submodules.append(submod)
             self._submodule_list.append(submod)
+        return self.make_after_init()
+    
+    def make_after_init(self):
         submod = self.__dict__["_submodule_list"][self.__dict__["_submodule_index"]]
         self.__dict__["_submodule_index"] += 1
         return submod
