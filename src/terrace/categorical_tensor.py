@@ -159,7 +159,7 @@ def _getitem(t: CategoricalTensor, idx: int):
     else:
         if len(t.shape) == 1:
             num_classes = t.num_classes[idx]
-=    return CategoricalTensor(t.tensor[idx], num_classes)
+    return CategoricalTensor(t.tensor[idx], num_classes)
 
 @_implements(torch.Tensor.shape.__get__)
 def _get_shape(t: CategoricalTensor):
