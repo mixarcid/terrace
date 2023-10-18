@@ -128,6 +128,7 @@ def _cat_reduce_ex(self, proto):
 
 @_implements(torch.cat)
 def _cat(inputs: Tuple[CategoricalTensor, ...], dim: int = -1) -> CategoricalTensor:
+    print(dim)
     if dim < 0:
         dim = len(inputs[0].shape) + dim
     if dim == len(inputs[0].shape) - 1:
@@ -158,9 +159,7 @@ def _getitem(t: CategoricalTensor, idx: int):
     else:
         if len(t.shape) == 1:
             num_classes = t.num_classes[idx]
-    if isinstance(num_classes, int):
-        num_classes = (num_classes,)
-    return CategoricalTensor(t.tensor[idx], num_classes)
+=    return CategoricalTensor(t.tensor[idx], num_classes)
 
 @_implements(torch.Tensor.shape.__get__)
 def _get_shape(t: CategoricalTensor):
